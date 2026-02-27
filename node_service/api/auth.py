@@ -33,6 +33,7 @@ class AuthHandler:
     def __init__(self, node_id: str):
         self.node_id = node_id
         self.secret_key = os.getenv('JWT_SECRET', 'node-secret-change-in-production')
+        self.master_token = os.getenv('MASTER_API_TOKEN', '')
         
         # Load operator credentials from environment
         # Format: OPERATOR_USERNAME and OPERATOR_PASSWORD
@@ -152,6 +153,8 @@ class AuthHandler:
             HTTPException: If token is invalid
         """
         token = credentials.credentials
+        if self.master_token and token == self.master_token:
+            return 'master'
         payload = self.decode_token(token)
         
         if payload is None:

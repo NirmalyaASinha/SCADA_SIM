@@ -120,6 +120,11 @@ class TelemetryAggregator:
             power = data.get('active_power_mw', 0.0)
             node_type = data.get('node_type', '')
             
+            # Check if node is isolated - skip isolated nodes in power calculation
+            node_state = self.node_states.get(node_id, 'ONLINE')
+            if node_state == 'ISOLATED':
+                power = 0.0  # Isolated nodes don't contribute to grid power
+            
             if node_type == 'generation':
                 total_generation += power
             elif node_type in ['transmission', 'distribution']:

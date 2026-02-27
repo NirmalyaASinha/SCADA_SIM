@@ -396,7 +396,8 @@
                 
                 if (token) {
                     fetchNodeState();
-                    const interval = setInterval(fetchNodeState, 3000);
+                    // Poll state every 1.5 seconds for real-time updates
+                    const interval = setInterval(fetchNodeState, 1500);
                     return () => clearInterval(interval);
                 }
             }, [token, telemetry]);
@@ -522,8 +523,24 @@
                 <div className="dashboard">
                     <div className="header">
                         <h1>{nodeInfo.node_id} | {nodeInfo.node_type}</h1>
-                        <div className={`frequency ${getStatusClass(telemetry.frequency_hz, 50.0, 0.01)}`}>
-                            {telemetry.frequency_hz?.toFixed(3) || '--'} Hz
+                        <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+                            <div className={`frequency ${getStatusClass(telemetry.frequency_hz, 50.0, 0.01)}`}>
+                                {telemetry.frequency_hz?.toFixed(3) || '--'} Hz
+                            </div>
+                            <div className="status-badge" style={{
+                                padding: '0.5rem 1rem',
+                                borderRadius: '4px',
+                                fontSize: '0.9rem',
+                                fontWeight: 'bold',
+                                backgroundColor: nodeState?.state === 'ISOLATED' ? 'rgba(239, 68, 68, 0.2)' : 
+                                               nodeState?.state === 'STANDBY' ? 'rgba(245, 158, 11, 0.2)' : 
+                                               'rgba(16, 185, 129, 0.2)',
+                                color: nodeState?.state === 'ISOLATED' ? '#ef4444' : 
+                                       nodeState?.state === 'STANDBY' ? '#f59e0b' : 
+                                       '#10b981'
+                            }}>
+                                {nodeState?.state || 'UNKNOWN'}
+                            </div>
                         </div>
                     </div>
                     

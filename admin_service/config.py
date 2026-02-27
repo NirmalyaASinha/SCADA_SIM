@@ -25,6 +25,9 @@ class AdminConfig:
         
         # JWT secret for admin authentication
         self.JWT_SECRET = os.getenv('JWT_SECRET', 'scada-admin-secret-change-in-prod')
+
+        # Shared token for admin -> node service control calls
+        self.MASTER_API_TOKEN = os.getenv('MASTER_API_TOKEN', 'scada-master-token')
         
         # Admin credentials (default, should be changed in production)
         self.ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')

@@ -187,6 +187,23 @@ Note: These defaults can be overridden with `OPERATOR_USERNAME` and `OPERATOR_PA
 ./stop.sh                # Stop all services
 ```
 
+### Node Control CLI (continuous)
+Use the built-in CLI to start/standby/isolate nodes from the terminal without opening the UI.
+
+```bash
+python3 tools/node_cli.py
+```
+
+What it does:
+- Prompts for admin login
+- Lists nodes with current state and power
+- Lets you run `start`, `standby` (stop), or `isolate` in a loop until you exit
+
+### Admin-to-Node Control Token
+Admin control actions (start/standby/isolate/voltage) are forwarded to node services using a shared token.
+Default token is set in docker compose as `MASTER_API_TOKEN: scada-master-token` for both admin and nodes.
+If you change it, update it on both sides and rebuild.
+
 ### Examples
 ```bash
 # View admin service logs

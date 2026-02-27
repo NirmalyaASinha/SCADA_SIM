@@ -147,6 +147,11 @@ def create_admin_app(admin_service) -> FastAPI:
             telemetry = admin_service.aggregator.get_latest(node['node_id'])
             if telemetry:
                 node['latest_telemetry'] = telemetry
+            state = admin_service.aggregator.get_node_state(node['node_id'])
+            if state != 'UNKNOWN':
+                node['node_state'] = state
+            elif telemetry and telemetry.get('node_state'):
+                node['node_state'] = telemetry.get('node_state')
         
         return nodes
     
@@ -247,6 +252,23 @@ def create_admin_app(admin_service) -> FastAPI:
         
         # Set node state to ISOLATED
         admin_service.aggregator.set_node_state(node_id, 'ISOLATED')
+        
+        # Also send isolation command to the node service
+        node_info = admin_service.registry.get_node(node_id)
+        if node_info:
+            try:
+                import aiohttp
+                auth_token = admin_service.config.MASTER_API_TOKEN or credentials.credentials
+                async with aiohttp.ClientSession() as session:
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/isolate"
+                    async with session.post(url, 
+                        json={"reason": request.reason, "force": True},
+                        headers={"Authorization": f"Bearer {auth_token}"}
+                    ) as resp:
+                        pass  # Response handled, node is now isolated
+            except Exception as e:
+                logger.error(f"Failed to send isolation to {node_id}: {e}")
+        
         logger.warning(f"Node {node_id} ISOLATED by {payload['sub']}: {request.reason}")
         
         return {
@@ -292,6 +314,22 @@ def create_admin_app(admin_service) -> FastAPI:
         if request.voltage_kv > thresholds['max']:
             raise HTTPException(status_code=400, detail=f"Voltage {request.voltage_kv} exceeds hard maximum {thresholds['max']}")
         
+        # Also send voltage command to the node service
+        node_info = admin_service.registry.get_node(node_id)
+        if node_info:
+            try:
+                import aiohttp
+                auth_token = admin_service.config.MASTER_API_TOKEN or credentials.credentials
+                async with aiohttp.ClientSession() as session:
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/voltage"
+                    async with session.post(url, 
+                        json={"voltage_kv": request.voltage_kv},
+                        headers={"Authorization": f"Bearer {auth_token}"}
+                    ) as resp:
+                        pass  # Response handled, voltage is set
+            except Exception as e:
+                logger.error(f"Failed to send voltage adjustment to {node_id}: {e}")
+        
         logger.info(f"Voltage adjusted for {node_id} to {request.voltage_kv} kV by {payload['sub']}")
         
         return {
@@ -315,6 +353,23 @@ def create_admin_app(admin_service) -> FastAPI:
             raise HTTPException(status_code=403, detail="Only admin can put nodes on standby")
         
         admin_service.aggregator.set_node_state(node_id, 'STANDBY')
+        
+        # Also send standby command to the node service
+        node_info = admin_service.registry.get_node(node_id)
+        if node_info:
+            try:
+                import aiohttp
+                auth_token = admin_service.config.MASTER_API_TOKEN or credentials.credentials
+                async with aiohttp.ClientSession() as session:
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/standby"
+                    async with session.post(url, 
+                        json={"duration_minutes": request.duration_minutes, "reason": request.reason},
+                        headers={"Authorization": f"Bearer {auth_token}"}
+                    ) as resp:
+                        pass  # Response handled, node is now on standby
+            except Exception as e:
+                logger.error(f"Failed to send standby to {node_id}: {e}")
+        
         logger.info(f"Node {node_id} put on standby for {request.duration_minutes} min by {payload['sub']}: {request.reason}")
         
         return {
@@ -338,6 +393,23 @@ def create_admin_app(admin_service) -> FastAPI:
             raise HTTPException(status_code=403, detail="Only admin can start nodes")
         
         admin_service.aggregator.set_node_state(node_id, 'ONLINE')
+        
+        # Also send start command to the node service
+        node_info = admin_service.registry.get_node(node_id)
+        if node_info:
+            try:
+                import aiohttp
+                auth_token = admin_service.config.MASTER_API_TOKEN or credentials.credentials
+                async with aiohttp.ClientSession() as session:
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/start"
+                    async with session.post(url, 
+                        json={"reason": request.reason},
+                        headers={"Authorization": f"Bearer {auth_token}"}
+                    ) as resp:
+                        pass  # Response handled, node is now online
+            except Exception as e:
+                logger.error(f"Failed to send start to {node_id}: {e}")
+        
         logger.info(f"Node {node_id} started by {payload['sub']}: {request.reason}")
         
         return {

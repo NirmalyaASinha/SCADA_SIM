@@ -65,6 +65,7 @@ services:
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       REDIS_URL: redis://redis:6379
       JWT_SECRET: scada-admin-secret-change-in-prod
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -95,6 +96,7 @@ services:
       MASTER_PORT: 9000
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       AUTO_CONNECT: "true"
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8101:8101"
       - "8102:8102"
@@ -118,6 +120,7 @@ services:
       MASTER_PORT: 9000
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       AUTO_CONNECT: "true"
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8103:8103"
       - "8104:8104"
@@ -141,6 +144,7 @@ services:
       MASTER_PORT: 9000
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       AUTO_CONNECT: "true"
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8111:8111"
       - "8112:8112"
@@ -164,6 +168,7 @@ services:
       MASTER_PORT: 9000
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       AUTO_CONNECT: "true"
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8113:8113"
       - "8114:8114"
@@ -187,6 +192,7 @@ services:
       MASTER_PORT: 9000
       DB_URL: postgresql://scada:scada123@timescaledb/scadadb
       AUTO_CONNECT: "true"
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8115:8115"
       - "8116:8116"

@@ -208,6 +208,10 @@ class SubstationNode(BaseNode):
         if self.state.transformer_temp_c > 90.0:
             self.state.relay_trip = True
             logger.error(f"{self.node_id} relay tripped: over-temperature {self.state.transformer_temp_c:.1f}°C")
+        
+        # Apply operational state constraints (isolation, standby, voltage override)
+        self.enforce_state_constraints()
+        self.apply_voltage_override()
     
     def set_tap_position(self, position: int, reason: str = "Operator command") -> Dict[str, Any]:
         """

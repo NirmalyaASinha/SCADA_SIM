@@ -16,6 +16,7 @@ services:
       WS_PORT: 8112
       MODBUS_PORT: 5030
       AUTO_CONNECT: "false"  # Prompts for master IP
+      MASTER_API_TOKEN: scada-master-token
     ports:
       - "8111:8111"
       - "8112:8112"

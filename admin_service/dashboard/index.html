@@ -169,6 +169,7 @@
             font-weight: 600;
         }
         .status-online { background: #065f46; color: #4ade80; }
+        .status-standby { background: #92400e; color: #f59e0b; }
         .status-offline { background: #7f1d1d; color: #ef4444; }
         .error { color: #ef4444; margin-top: 0.5rem; }
         .node-actions {
@@ -340,8 +341,45 @@
             background: #6b7280;
             color: white;
         }
-        .password-modal-buttons .cancel-btn:hover {
-            background: #4b5563;
+        .status-isolated {
+            color: #ef4444;
+            background: #7f1d1d;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .node-card.isolated {
+            border-color: #ef4444;
+            background: #1f1014;
+        }
+        .voltage-input-container {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        .voltage-input {
+            width: 80px;
+            padding: 0.5rem;
+            background: #0a0e1a;
+            border: 1px solid #2a3142;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: inherit;
+            text-align: center;
+        }
+        .voltage-input-btn {
+            padding: 0.5rem 0.75rem;
+            background: #4ade80;
+            color: #0a0e1a;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .voltage-input-btn:hover {
+            background: #22c55e;
         }
     </style>
 </head>
@@ -563,10 +601,29 @@
                     setNodeThresholds(thresholds);
                 };
                 
+                // Initial fetch
                 fetchNodeMap();
                 if (nodes.length > 0) {
                     fetchThresholds();
                 }
+                
+                // Poll node map every 2 seconds for real-time updates
+                const mapInterval = setInterval(() => {
+                    fetchNodeMap();
+                }, 2000);
+                
+                // Poll thresholds every 5 seconds
+                const thresholdInterval = setInterval(() => {
+                    if (nodes.length > 0) {
+                        fetchThresholds();
+                    }
+                }, 5000);
+                
+                // Cleanup intervals
+                return () => {
+                    clearInterval(mapInterval);
+                    clearInterval(thresholdInterval);
+                };
             }, [nodes, token]);
             
             const handleIsolateNode = async (nodeId) => {
@@ -728,7 +785,7 @@
                                             cx={location.x} 
                                             cy={location.y} 
                                             r="8"
-                                            className={`map-node-circle ${location.state?.toLowerCase() || 'online'}`}
+                                            className={`map-node-circle ${((location.state || 'ONLINE').toLowerCase() === 'normal') ? 'online' : (location.state || 'ONLINE').toLowerCase()}`}
                                         />
                                         <text 
                                             x={location.x} 
@@ -757,23 +814,29 @@
                     )}
                     
                     <div className="nodes-grid">
-                        {nodes.map(node => (
-                            <div key={node.node_id} className="node-card">
-                                <h3>{node.node_id}</h3>
-                                <p>Type: {node.node_type}</p>
-                                <p>IP: {node.ip}:{node.rest_port}</p>
-                                <p>
-                                    Status: <span className={`node-status status-${node.status.toLowerCase()}`}>
-                                        {node.status}
-                                    </span>
-                                </p>
-                                {node.latest_telemetry && (
-                                    <>
-                                        <p>Power: {node.latest_telemetry.active_power_mw?.toFixed(1)} MW</p>
-                                        <p>Voltage: {node.latest_telemetry.bus_voltage_kv?.toFixed(2)} kV</p>
-                                    </>
-                                )}
-                                <div className="node-actions">
+                        {nodes.map(node => {
+                            const mapState = nodeMap[node.node_id]?.state || node.node_state || node.latest_telemetry?.node_state || node.status;
+                            const normalizedState = (mapState || 'ONLINE').toString().toLowerCase();
+                            const statusClass = normalizedState === 'normal' ? 'online' : normalizedState;
+                            const isIsolated = statusClass === 'isolated';
+
+                            return (
+                                <div key={node.node_id} className={`node-card ${isIsolated ? 'isolated' : ''}`}>
+                                    <h3>{node.node_id}</h3>
+                                    <p>Type: {node.node_type}</p>
+                                    <p>IP: {node.ip}:{node.rest_port}</p>
+                                    <p>
+                                        Status: <span className={`node-status status-${statusClass}`}>
+                                            {mapState || 'ONLINE'}
+                                        </span>
+                                    </p>
+                                    {node.latest_telemetry && (
+                                        <>
+                                            <p>Power: {node.latest_telemetry.active_power_mw?.toFixed(1)} MW</p>
+                                            <p>Voltage: {node.latest_telemetry.bus_voltage_kv?.toFixed(2)} kV</p>
+                                        </>
+                                    )}
+                                    <div className="node-actions">
                                     <button 
                                         className="isolate-btn"
                                         onClick={() => handleIsolateNode(node.node_id)}
@@ -818,9 +881,10 @@
                                             SET
                                         </button>
                                     </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     
                     {passwordModal && (

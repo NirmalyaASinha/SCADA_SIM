@@ -584,6 +584,7 @@ def create_app(node_service) -> FastAPI:
         
         return {
             "node_id": node_service.config.NODE_ID,
+            "state": node_service.simulation.get_operational_state(),
             "operational_state": state.node_state,
             "is_isolated": node_service.simulation.is_isolated(),
             "is_standby": node_service.simulation.is_standby(),

@@ -192,6 +192,10 @@ class GenerationNode(BaseNode):
         if self.state.frequency_hz < 49.6:
             self.state.relay_trip = True
             logger.error(f"{self.node_id} relay tripped: under-frequency {self.state.frequency_hz:.3f} Hz")
+        
+        # Apply operational state constraints (isolation, standby, voltage override)
+        self.enforce_state_constraints()
+        self.apply_voltage_override()
     
     def set_power_setpoint(self, active_mw: float, reactive_mvar: Optional[float] = None) -> Dict[str, Any]:
         """

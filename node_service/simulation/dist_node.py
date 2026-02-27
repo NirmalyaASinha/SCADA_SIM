@@ -211,6 +211,10 @@ class DistributionNode(BaseNode):
         if self.state.line_current_a > 390.0 and self.state.breaker_state:
             self.state.breaker_state = False
             logger.error(f"{self.node_id} breaker tripped: over-current {self.state.line_current_a:.1f} A")
+        
+        # Apply operational state constraints (isolation, standby, voltage override)
+        self.enforce_state_constraints()
+        self.apply_voltage_override()
     
     def set_feeder_switch(self, state: bool, reason: str = "Operator command") -> Dict[str, Any]:
         """

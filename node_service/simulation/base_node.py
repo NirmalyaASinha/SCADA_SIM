@@ -275,6 +275,15 @@ class BaseNode:
         """Check if node is on standby"""
         return self._standby_flag
     
+    def get_operational_state(self) -> str:
+        """Get the operational state as a string (ISOLATED, STANDBY, or ONLINE)"""
+        if self._isolation_flag:
+            return "ISOLATED"
+        elif self._standby_flag:
+            return "STANDBY"
+        else:
+            return "ONLINE"
+    
     def set_applied_voltage(self, voltage_kv: float):
         """Set voltage to be applied (overrides simulation)"""
         self._applied_voltage = voltage_kv
