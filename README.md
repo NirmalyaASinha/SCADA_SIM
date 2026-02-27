@@ -165,6 +165,8 @@ The node will:
 | DIST-001  | http://localhost:8131/ui   | operator_dist001 | dist001@scada  |
 | DIST-002  | http://localhost:8133/ui   | operator_dist002 | dist002@scada  |
 
+Note: These defaults can be overridden with `OPERATOR_USERNAME` and `OPERATOR_PASSWORD` in docker-compose.yml or .env.
+
 ### Monitoring Tools
 - **Grafana**: `admin` / `admin123`
 
