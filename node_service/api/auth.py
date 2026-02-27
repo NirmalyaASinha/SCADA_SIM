@@ -60,8 +60,11 @@ class AuthHandler:
     
     def _default_password(self) -> str:
         """Generate default password based on node ID"""
-        # All nodes use Login@SCADA
-        return "Login@SCADA"
+        # GEN-001 -> gen001@scada
+        # SUB-001 -> sub001@scada
+        node_type = self.node_id.split('-')[0].lower()
+        node_num = self.node_id.split('-')[1]
+        return f"{node_type}{node_num}@scada"
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
