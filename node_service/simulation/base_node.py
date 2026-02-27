@@ -95,6 +95,11 @@ class BaseNode:
         self.simulation_step = 1.0  # seconds
         self.noise_std = 0.003  # 0.3% standard deviation
         
+        # Operational state management (new)
+        self._isolation_flag = False  # True when node is isolated
+        self._standby_flag = False  # True when node is on standby
+        self._applied_voltage = None  # Manually set voltage (overrides simulation)
+        
         # For thermal lag simulation
         self._thermal_time_constant = 300.0  # 5 minutes in seconds
         self._previous_temp = None
@@ -237,6 +242,75 @@ class BaseNode:
         # All normal
         self.state.node_state = "NORMAL"
     
+    # =========================================================================
+    # STATE CONTROL METHODS (called from API)
+    # =========================================================================
+    
+    def set_isolation(self, isolated: bool):
+        """Set or clear node isolation state"""
+        self._isolation_flag = isolated
+        if isolated:
+            self.state.node_state = "ISOLATED"
+            self.state.breaker_state = False
+            self.state.active_power_mw = 0.0
+            logger.info(f"Node {self.node_id} ISOLATED")
+        else:
+            logger.info(f"Node {self.node_id} isolation cleared")
+    
+    def is_isolated(self) -> bool:
+        """Check if node is isolated"""
+        return self._isolation_flag
+    
+    def set_standby(self, on_standby: bool):
+        """Set or clear node standby state"""
+        self._standby_flag = on_standby
+        if on_standby:
+            self.state.node_state = "STANDBY"
+            self.state.active_power_mw = 0.0  # No power output when on standby
+            logger.info(f"Node {self.node_id} on STANDBY")
+        else:
+            logger.info(f"Node {self.node_id} returning to NORMAL")
+    
+    def is_standby(self) -> bool:
+        """Check if node is on standby"""
+        return self._standby_flag
+    
+    def set_applied_voltage(self, voltage_kv: float):
+        """Set voltage to be applied (overrides simulation)"""
+        self._applied_voltage = voltage_kv
+        logger.info(f"Node {self.node_id} voltage set to {voltage_kv} kV")
+    
+    def get_applied_voltage(self) -> Optional[float]:
+        """Get the manually applied voltage"""
+        return self._applied_voltage
+    
+    def clear_applied_voltage(self):
+        """Clear manually applied voltage (use simulation default)"""
+        self._applied_voltage = None
+    
+    def enforce_state_constraints(self):
+        """
+        Enforce operational state constraints
+        Called at each simulation step to enforce:
+        - Isolation: breaker off, no power, low voltage
+        - Standby: reduced power, normal voltage
+        """
+        if self._isolation_flag:
+            self.state.breaker_state = False
+            self.state.active_power_mw = 0.0
+            self.state.line_current_a = 0.0
+            if self._applied_voltage is None:
+                self.state.bus_voltage_kv = 0.0
+        
+        if self._standby_flag:
+            self.state.active_power_mw = 0.0
+            self.state.line_current_a = max(0.0, self.state.line_current_a * 0.05)  # Minimal standby current
+    
+    def apply_voltage_override(self):
+        """Apply manually set voltage if defined"""
+        if self._applied_voltage is not None and not self._isolation_flag:
+            self.state.bus_voltage_kv = self._applied_voltage
+    
     def simulate_frequency(self) -> float:
         """
         Simulate system frequency with realistic variation
@@ -275,6 +349,12 @@ class BaseNode:
                 
                 # Call subclass update method
                 await self.update_simulation()
+                
+                # Enforce state constraints (isolation, standby)
+                self.enforce_state_constraints()
+                
+                # Apply voltage override if set
+                self.apply_voltage_override()
                 
                 # Check alarms
                 self.check_alarms()

@@ -796,24 +796,26 @@
                                         {startLoading[node.node_id] ? '⏳...' : '▶️ START'}
                                     </button>
                                     <div className="voltage-control">
+                                        <input 
+                                            type="number" 
+                                            placeholder="kV"
+                                            defaultValue={node.latest_telemetry?.bus_voltage_kv?.toFixed(1) || 0}
+                                            onChange={(e) => {
+                                                const elem = e.target;
+                                                elem.dataset.voltage = parseFloat(e.target.value);
+                                            }}
+                                            step="0.1"
+                                            style={{width: '80px', marginRight: '5px', padding: '4px', borderRadius: '4px', border: '1px solid #2a3142', background: '#0a0e1a', color: '#e0e0e0', fontSize: '0.85rem'}}
+                                        />
                                         <button 
                                             className="voltage-btn"
-                                            onClick={() => {
-                                                const current = node.latest_telemetry?.bus_voltage_kv || 0;
-                                                handleVoltageAdjust(node.node_id, current - 5);
+                                            onClick={(e) => {
+                                                const input = e.target.parentElement.querySelector('input');
+                                                handleVoltageAdjust(node.node_id, parseFloat(input.value));
                                             }}
+                                            style={{padding: '4px 8px', fontSize: '0.8rem'}}
                                         >
-                                            −
-                                        </button>
-                                        <span className="voltage-display">{node.latest_telemetry?.bus_voltage_kv?.toFixed(1) || '--'} kV</span>
-                                        <button 
-                                            className="voltage-btn"
-                                            onClick={() => {
-                                                const current = node.latest_telemetry?.bus_voltage_kv || 0;
-                                                handleVoltageAdjust(node.node_id, current + 5);
-                                            }}
-                                        >
-                                            +
+                                            SET
                                         </button>
                                     </div>
                                 </div>

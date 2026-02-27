@@ -210,3 +210,6 @@ class StandbyRequest(BaseModel):
 class IsolateRequest(BaseModel):
     reason: str = "Emergency Isolation"
     force: bool = False
+
+class StartNodeRequest(BaseModel):
+    reason: str = "Restoring from standby"

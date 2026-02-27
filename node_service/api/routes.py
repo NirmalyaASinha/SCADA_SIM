@@ -422,12 +422,13 @@ def create_app(node_service) -> FastAPI:
         """Adjust node voltage with threshold checking"""
         username = auth_handler.verify_token(credentials)
         
-        # Get voltage thresholds for this node (simplified for node service)
-        thresholds = {
-            'min': 300,
-            'safe_max': 390,
-            'max': 410
-        }
+        # Get voltage thresholds for this node
+        if 'GEN' in node_service.config.NODE_ID:
+            thresholds = {'min': 370, 'safe_max': 390, 'max': 395}
+        elif 'SUB' in node_service.config.NODE_ID:
+            thresholds = {'min': 120, 'safe_max': 135, 'max': 150}
+        else:
+            thresholds = {'min': 8, 'safe_max': 12, 'max': 14}
         
         # Check if voltage exceeds safe threshold
         if request.voltage_kv > thresholds['safe_max']:
@@ -450,6 +451,8 @@ def create_app(node_service) -> FastAPI:
         if request.voltage_kv > thresholds['max']:
             raise HTTPException(status_code=400, detail=f"Voltage {request.voltage_kv} exceeds hard maximum {thresholds['max']}")
         
+        # APPLY VOLTAGE TO SIMULATION
+        node_service.simulation.set_applied_voltage(request.voltage_kv)
         logger.info(f"Voltage adjusted to {request.voltage_kv} kV by {username}")
         
         # Log action
@@ -482,6 +485,8 @@ def create_app(node_service) -> FastAPI:
         """Put node on standby"""
         username = auth_handler.verify_token(credentials)
         
+        # APPLY STANDBY TO SIMULATION
+        node_service.simulation.set_standby(True)
         logger.info(f"Node put on standby for {request.duration_minutes} min by {username}")
         
         # Log action
@@ -513,6 +518,8 @@ def create_app(node_service) -> FastAPI:
         """Isolate node from grid"""
         username = auth_handler.verify_token(credentials)
         
+        # APPLY ISOLATION TO SIMULATION
+        node_service.simulation.set_isolation(True)
         logger.warning(f"Node ISOLATED by {username}: {request.reason}")
         
         # Log action
@@ -533,6 +540,57 @@ def create_app(node_service) -> FastAPI:
             "action": "isolated",
             "reason": request.reason,
             "message": f"Node has been physically and logically isolated from the grid."
+        }
+    
+    @app.post("/start")
+    async def start_node(
+        request: StartNodeRequest,
+        req: Request,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Start node from standby"""
+        username = auth_handler.verify_token(credentials)
+        
+        # CLEAR STANDBY FROM SIMULATION
+        node_service.simulation.set_standby(False)
+        logger.info(f"Node started from standby by {username}: {request.reason}")
+        
+        # Log action
+        await node_service.log_operator_action(
+            operator=username,
+            operator_ip=get_client_ip(req),
+            action_type='START',
+            action_detail={
+                'reason': request.reason
+            },
+            result='SUCCESS'
+        )
+        
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "state": "ONLINE",
+            "message": "Node is now online"
+        }
+    
+    @app.get("/state")
+    async def get_node_state(
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Get current operational state of node"""
+        username = auth_handler.verify_token(credentials)
+        
+        state = node_service.simulation.get_state()
+        
+        return {
+            "node_id": node_service.config.NODE_ID,
+            "operational_state": state.node_state,
+            "is_isolated": node_service.simulation.is_isolated(),
+            "is_standby": node_service.simulation.is_standby(),
+            "current_voltage_kv": state.bus_voltage_kv,
+            "applied_voltage_kv": node_service.simulation.get_applied_voltage(),
+            "breaker_state": state.breaker_state,
+            "active_power_mw": state.active_power_mw
         }
     
     @app.get("/voltage/threshold")
