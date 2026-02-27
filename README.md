@@ -8,6 +8,14 @@ A **production-faithful**, distributed SCADA (Supervisory Control and Data Acqui
 
 ## 🎯 Features
 
+### ✨ Latest: Historian & Time-Series Analysis (v2.0)
+- **Historical Data Queries**: Retrieve up to 7 days of telemetry data
+- **Multi-Node Comparison**: Analyze voltage, current, power across any combination of nodes
+- **Interactive Charts**: SVG-based visualization with auto-scaling axes
+- **Data Export**: One-click CSV download for Excel/Python analysis
+- **Automatic Refresh**: Charts update as you change selections
+- **Database Backend**: TimescaleDB with 30-day rolling retention
+
 ### Architecture
 - **7 Independent Node Services**: Generation stations (GEN), transmission substations (SUB), and distribution stations (DIST)
 - **Distributed Deployment**: Nodes can run on different physical machines across a network
@@ -31,7 +39,11 @@ A **production-faithful**, distributed SCADA (Supervisory Control and Data Acqui
 
 ### Modern Operator Dashboards 🎨
 - **Admin Operations Control Center**: Unified grid overview with live KPI cards, topology map, and alarm panel
-- **Sidebar Navigation**: 10 organized menu items (Grid Overview, Node Management, Control Center, Alarms, Security Monitoring, Historian, Modbus Monitor, Audit Log, Settings)
+- **Sidebar Navigation**: 10 organized menu items (Grid Overview, Node Management, Control Center, Alarms, Security Monitoring, **Historian**, Modbus Monitor, Audit Log, Settings)
+- **Historian Tab** ⭐: Query 15-minute to 7-day historical telemetry with multi-node, multi-metric selection
+  - Interactive SVG line charts (voltage, current, power, frequency, temperature)
+  - One-click CSV export for analysis
+  - Automatic data refresh on metric selection changes
 - **Node Operator Dashboards**: Single-line diagrams showing electrical topology, breaker states, and upstream/downstream status
 - **Real-Time Styling**: Modern dark theme with neon green accents (#0a0a0f void background, #00e676 energy color)
 - **Responsive Layout**: Works on desktop control room displays and mobile operator tablets
@@ -46,10 +58,11 @@ A **production-faithful**, distributed SCADA (Supervisory Control and Data Acqui
 
 ### Technology Stack
 - **Backend**: Python 3.11, FastAPI, asyncio
-- **Database**: PostgreSQL + TimescaleDB (time-series optimization)
-- **Protocols**: Modbus TCP (pymodbus), WebSockets
-- **Frontend**: React 18 (single-file HTML, no build step)
-- **Deployment**: Docker + Docker Compose
+- **Database**: PostgreSQL + TimescaleDB (time-series optimization) with 30-day rolling retention
+- **Protocols**: Modbus TCP (pymodbus), WebSockets, REST APIs
+- **Frontend**: React 18 via jsDelivr CDN (single-file HTML, no build step)
+- **Visualization**: SVG-based charts + Recharts integration ready
+- **Deployment**: Docker + Docker Compose (v2)
 - **Monitoring**: Prometheus + Grafana
 
 ---
@@ -275,7 +288,83 @@ If you change it, update it on both sides and rebuild.
 
 ---
 
-## 🔌 Modbus TCP Interface
+## � Historian Feature
+
+### Overview
+The **Historian Tab** in the admin dashboard provides time-series analysis and historical data retrieval for all nodes.
+
+### Capabilities
+- **Multi-Node Selection**: Query any combination of nodes simultaneously
+- **Multi-Metric Analysis**: Voltage, Current, Power, Frequency, Temperature
+- **Time Range Options**: 15-minute, 1-hour, 6-hour, 24-hour, 7-day windows
+- **Interactive Visualization**: SVG line charts with color-coded metrics
+- **CSV Export**: Download data for external analysis tools (Excel, Python, etc.)
+- **Auto-Refresh**: Charts update automatically when selections change
+- **Data Source**: PostgreSQL TimescaleDB with optimized queries
+
+### Usage
+
+1. **Navigate to Historian Tab** in admin dashboard sidebar (📊 icon)
+2. **Select Nodes**: Hold Ctrl/Cmd to multi-select (e.g., GEN-001, GEN-002, SUB-001)
+3. **Select Metrics**: Toggle buttons for Voltage, Current, Power, Frequency, Temperature
+4. **Choose Time Range**: 15m, 1H, 6H, 24H, or 7D
+5. **View Chart**: SVG visualization with Y-axis auto-scaling based on data
+6. **Export CSV**: Click "Export CSV" button to download data with columns [timestamp, node_id, metric, value]
+
+### Example Queries
+
+**Query generation capacity over the last 6 hours:**
+```
+Nodes: GEN-001, GEN-002
+Metrics: Power
+Time Range: 6H
+→ Chart shows MW output trend for both generators
+```
+
+**Compare substation voltages (24h):**
+```
+Nodes: SUB-001, SUB-002, SUB-003
+Metrics: Voltage
+Time Range: 24H
+→ Identify voltage deviations and stability issues across transmission network
+```
+
+### API Endpoint
+
+```bash
+# Get historical metrics
+curl "http://localhost:9000/historian/metrics?nodes=GEN-001,SUB-001&metrics=Voltage,Current,Power&time_range=24H" \
+  -H "Authorization: Bearer <token>"
+
+# Response structure
+{
+  "status": "success",
+  "node_ids": ["GEN-001", "SUB-001"],
+  "metrics": ["Voltage", "Current", "Power"],
+  "time_range": "24H",
+  "data": [
+    {
+      "time": "2026-02-27T10:00:00Z",
+      "node_id": "GEN-001",
+      "bus_voltage_kv": 130.4,
+      "line_current_a": 450.2,
+      "active_power_mw": 245.1
+    },
+    ...
+  ],
+  "count": 1440
+}
+```
+
+### Data Retention
+- **Interval**: 1-second telemetry snapshots
+- **Retention**: 30 days rolling window
+- **Table**: `node_telemetry` (TimescaleDB hypertable)
+- **Indexing**: Optimized on (node_id, time DESC)
+
+---
+
+## �🔌 Modbus TCP Interface
 
 ### Connection Details
 
@@ -548,22 +637,48 @@ curl -X POST http://localhost:9000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "admin@scada2024"}'
 
-# Returns: {"access_token": "eyJ0eXAi...", "token_type": "bearer"}
+# Returns: {"success": true, "token": "eyJ0eXAi...", "username": "admin", "role": "admin"}
 ```
 
-**Endpoints:**
+**Core Endpoints:**
 ```bash
 # Get all registered nodes
-curl http://localhost:9000/nodes
+curl http://localhost:9000/nodes \
+  -H "Authorization: Bearer <token>"
 
 # Get grid overview (aggregated KPIs)
-curl http://localhost:9000/grid/overview
+curl http://localhost:9000/grid/overview \
+  -H "Authorization: Bearer <token>"
 
+# Get system health
+curl http://localhost:9000/health
+```
+
+**⭐ Historian Endpoints (NEW):**
+```bash
+# Get historical metrics - Multi-node, multi-metric time-series data
+curl "http://localhost:9000/historian/metrics?nodes=GEN-001,SUB-001&metrics=Voltage,Current&time_range=24H" \
+  -H "Authorization: Bearer <token>"
+
+# Query parameters:
+# - nodes: Comma-separated node IDs (e.g., GEN-001,GEN-002,SUB-001)
+# - metrics: Comma-separated metrics (Voltage,Current,Power,Frequency,Temperature)
+# - time_range: 15m, 1H, 6H, 24H, or 7D
+```
+
+**Control Endpoints:**
+```bash
 # Control node breaker (requires admin role)
 curl -X POST http://localhost:9000/nodes/SUB-001/control/breaker \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"action": "open", "reason": "Maintenance"}'
+
+# Trigger cascade event (for testing)
+curl -X POST http://localhost:9000/nodes/GEN-001/state_change \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"new_state": "TRIPPED", "reason": "Test cascade"}'
 ```
 
 ### Node REST API (Port 810x, 811x, 813x)
@@ -643,17 +758,60 @@ SCADA_SIM_2/
 
 ---
 
+## 🚀 Recent Updates (Version 2.0 - Draft Second)
+
+### ✨ New Features
+- **⭐ Historian Tab**: Complete implementation of historical telemetry queries
+  - Multi-node, multi-metric selection for time-series analysis
+  - Interactive SVG line charts with auto-scaling
+  - One-click CSV export for external analysis
+  - Auto-refresh on metric/time-range selection changes
+  - Supports 15m to 7-day time windows
+
+### 🐛 Fixes & Improvements
+- **Fixed CDN Links**: Migrated from unpkg.com to jsDelivr
+  - Resolved 302 redirect issues preventing React from loading
+  - Dashboard now loads reliably in all browsers
+  - Fallback to production React libraries
+
+- **Node Registration**: All 7 nodes now properly register with admin service
+  - GEN-001, GEN-002, SUB-001, SUB-002, SUB-003, DIST-001, DIST-002 ✅
+  - Real-time connection tracking via WebSocket
+  - Heartbeat-based health monitoring
+
+- **Dashboard Backend**: Enhanced API routes with historian support
+  - New `/historian/metrics` endpoint for time-series queries
+  - Improved error handling and validation
+  - Optimized database queries for performance
+
+### 📊 Database Enhancements
+- `node_telemetry` table: 30-day rolling retention with TimescaleDB optimization
+- Index optimization on (node_id, time DESC) for histogram queries
+- Support for in-memory caching of recent data
+
+### 🎨 UI/UX
+- Modern dark theme fully operational
+- Real-time telemetry updates (1-second intervals)
+- Responsive design for desktop and tablet
+- Snappy interactions with no lag
+
+---
+
 ## 🤝 Contributing
 
 This is a research/educational platform. Suggestions for improvements:
 - Additional node types (e.g., renewable generation)
 - More realistic protection relay logic
-- Enhanced grid topology visualization
+- Enhanced grid topology visualization (React Flow integration)
+- Real-time anomaly detection using ML
 - Additional industrial protocols (DNP3, IEC 61850)
+- Historian charting with Recharts library
+- Advanced power flow analysis tools
 
 ---
 
 ## 📄 License
+
 
 This project is provided as-is for educational and research purposes. The intentional security vulnerabilities make it unsuitable for production deployment.
 
