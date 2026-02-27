@@ -48,7 +48,11 @@ echo ""
 # Admin Service
 echo "━━━ ADMIN SERVICE ━━━"
 check_health "Admin REST API   " 9000 "/health"
-check_health "Admin WebSocket  " 9001 "/"  # Will fail WebSocket on HTTP but checks port
+if netstat -tuln 2>/dev/null | grep -q ":9001 " || ss -tuln 2>/dev/null | grep -q ":9001 "; then
+    echo "✅ Admin WebSocket  "
+else
+    echo "❌ Admin WebSocket   (not listening)"
+fi
 check_health "Admin Dashboard  " 3000 "/"
 echo ""
 
@@ -56,37 +60,65 @@ echo ""
 echo "━━━ NODE SERVICES ━━━"
 check_health "GEN-001 REST     " 8101 "/health"
 check_health "GEN-001 Dashboard" 8101 "/ui"
-check_health "GEN-001 WebSocket" 8102 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8102 " || ss -tuln 2>/dev/null | grep -q ":8102 "; then
+    echo "✅ GEN-001 WebSocket"
+else
+    echo "❌ GEN-001 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "GEN-002 REST     " 8103 "/health"
 check_health "GEN-002 Dashboard" 8103 "/ui"
-check_health "GEN-002 WebSocket" 8104 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8104 " || ss -tuln 2>/dev/null | grep -q ":8104 "; then
+    echo "✅ GEN-002 WebSocket"
+else
+    echo "❌ GEN-002 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "SUB-001 REST     " 8111 "/health"
 check_health "SUB-001 Dashboard" 8111 "/ui"
-check_health "SUB-001 WebSocket" 8112 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8112 " || ss -tuln 2>/dev/null | grep -q ":8112 "; then
+    echo "✅ SUB-001 WebSocket"
+else
+    echo "❌ SUB-001 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "SUB-002 REST     " 8113 "/health"
 check_health "SUB-002 Dashboard" 8113 "/ui"
-check_health "SUB-002 WebSocket" 8114 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8114 " || ss -tuln 2>/dev/null | grep -q ":8114 "; then
+    echo "✅ SUB-002 WebSocket"
+else
+    echo "❌ SUB-002 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "SUB-003 REST     " 8115 "/health"
 check_health "SUB-003 Dashboard" 8115 "/ui"
-check_health "SUB-003 WebSocket" 8116 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8116 " || ss -tuln 2>/dev/null | grep -q ":8116 "; then
+    echo "✅ SUB-003 WebSocket"
+else
+    echo "❌ SUB-003 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "DIST-001 REST    " 8131 "/health"
 check_health "DIST-001 Dashboard" 8131 "/ui"
-check_health "DIST-001 WebSocket" 8132 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8132 " || ss -tuln 2>/dev/null | grep -q ":8132 "; then
+    echo "✅ DIST-001 WebSocket"
+else
+    echo "❌ DIST-001 WebSocket (not listening)"
+fi
 echo ""
 
 check_health "DIST-002 REST    " 8133 "/health"
 check_health "DIST-002 Dashboard" 8133 "/ui"
-check_health "DIST-002 WebSocket" 8134 "/"
+if netstat -tuln 2>/dev/null | grep -q ":8134 " || ss -tuln 2>/dev/null | grep -q ":8134 "; then
+    echo "✅ DIST-002 WebSocket"
+else
+    echo "❌ DIST-002 WebSocket (not listening)"
+fi
 echo ""
 
 # Monitoring

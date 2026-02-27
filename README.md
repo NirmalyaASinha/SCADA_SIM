@@ -147,23 +147,23 @@ The node will:
 
 ### Admin Dashboard (http://localhost:3000)
 
-| Username         | Password         | Role      | Permissions                          |
-|------------------|------------------|-----------|--------------------------------------|
-| admin            | admin@scada2024  | Admin     | Full access (control + management)   |
-| engineer         | eng@scada2024    | Engineer  | View + control nodes                 |
-| viewer           | view@scada2024   | Viewer    | Read-only access                     |
+| Username         | Password     | Role      | Permissions                          |
+|------------------|--------------|-----------|--------------------------------------|
+| admin            | Admin@SCADA  | Admin     | Full access (control + management)   |
+| engineer         | Admin@SCADA  | Engineer  | View + control nodes                 |
+| viewer           | Admin@SCADA  | Viewer    | Read-only access                     |
 
 ### Node Operator Dashboards
 
-| Node      | Dashboard URL              | Username         | Password       |
-|-----------|----------------------------|------------------|----------------|
-| GEN-001   | http://localhost:8101/ui   | operator_gen001  | gen001@scada   |
-| GEN-002   | http://localhost:8103/ui   | operator_gen002  | gen002@scada   |
-| SUB-001   | http://localhost:8111/ui   | operator_sub001  | sub001@scada   |
-| SUB-002   | http://localhost:8113/ui   | operator_sub002  | sub002@scada   |
-| SUB-003   | http://localhost:8115/ui   | operator_sub003  | sub003@scada   |
-| DIST-001  | http://localhost:8131/ui   | operator_dist001 | dist001@scada  |
-| DIST-002  | http://localhost:8133/ui   | operator_dist002 | dist002@scada  |
+| Node      | Dashboard URL              | Username         | Password     |
+|-----------|----------------------------|------------------|--------------|
+| GEN-001   | http://localhost:8101/ui   | operator_gen001  | Login@SCADA  |
+| GEN-002   | http://localhost:8103/ui   | operator_gen002  | Login@SCADA  |
+| SUB-001   | http://localhost:8111/ui   | operator_sub001  | Login@SCADA  |
+| SUB-002   | http://localhost:8113/ui   | operator_sub002  | Login@SCADA  |
+| SUB-003   | http://localhost:8115/ui   | operator_sub003  | Login@SCADA  |
+| DIST-001  | http://localhost:8131/ui   | operator_dist001 | Login@SCADA  |
+| DIST-002  | http://localhost:8133/ui   | operator_dist002 | Login@SCADA  |
 
 Note: These defaults can be overridden with `OPERATOR_USERNAME` and `OPERATOR_PASSWORD` in docker-compose.yml or .env.
 

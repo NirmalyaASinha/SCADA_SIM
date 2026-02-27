@@ -51,20 +51,17 @@ class AuthHandler:
     
     def _default_username(self) -> str:
         """Generate default username based on node ID"""
-        # GEN-001 -> operator_gen1
-        # SUB-001 -> operator_sub1
-        # DIST-001 -> operator_dist1
+        # GEN-001 -> operator_gen001
+        # SUB-001 -> operator_sub001
+        # DIST-001 -> operator_dist001
         node_type = self.node_id.split('-')[0].lower()
         node_num = self.node_id.split('-')[1]
         return f"operator_{node_type}{node_num}"
     
     def _default_password(self) -> str:
         """Generate default password based on node ID"""
-        # GEN-001 -> gen1@scada
-        # SUB-001 -> sub1@scada
-        node_type = self.node_id.split('-')[0].lower()
-        node_num = self.node_id.split('-')[1]
-        return f"{node_type}{node_num}@scada"
+        # All nodes use Login@SCADA
+        return "Login@SCADA"
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""

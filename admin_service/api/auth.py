@@ -28,15 +28,15 @@ class AdminAuthHandler:
         # Passwords stored as plain strings; bcrypt verification happens at login
         self.users = {
             'admin': {
-                'password': 'admin@scada2024',
+                'password': 'Admin@SCADA',
                 'role': 'admin'
             },
             'engineer': {
-                'password': 'eng@scada2024',
+                'password': 'Admin@SCADA',
                 'role': 'engineer'
             },
             'viewer': {
-                'password': 'view@scada2024',
+                'password': 'Admin@SCADA',
                 'role': 'viewer'
             }
         }
