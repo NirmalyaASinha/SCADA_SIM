@@ -1,0 +1,30 @@
+version: '3.8'
+
+# Docker Compose for running INDIVIDUAL nodes on separate machines
+# Each node can run independently and connect to a remote SCADA master
+
+services:
+  
+  node_sub001:
+    build: ./node_service
+    container_name: scada_node_sub001
+    environment:
+      NODE_ID: SUB-001
+      NODE_TYPE: transmission
+      UNIT_ID: 3
+      REST_PORT: 8111
+      WS_PORT: 8112
+      MODBUS_PORT: 5030
+      AUTO_CONNECT: "false"  # Prompts for master IP
+    ports:
+      - "8111:8111"
+      - "8112:8112"
+      - "5030:5030"
+    stdin_open: true
+    tty: true
+    networks:
+      - scada_network
+
+networks:
+  scada_network:
+    driver: bridge

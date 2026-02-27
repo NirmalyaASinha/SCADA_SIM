@@ -1,0 +1,250 @@
+services:
+  
+  # ===================================================================
+  # INFRASTRUCTURE SERVICES
+  # ===================================================================
+  
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: scada_timescaledb
+    environment:
+      POSTGRES_DB: scadadb
+      POSTGRES_USER: scada
+      POSTGRES_PASSWORD: scada123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - scada_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scada"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:7-alpine
+    container_name: scada_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - scada_network
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: scada_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - scada_network
+  
+  grafana:
+    image: grafana/grafana:latest
+    container_name: scada_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    networks:
+      - scada_network
+  
+  # ===================================================================
+  # SCADA ADMIN SERVICE
+  # ===================================================================
+  
+  admin_service:
+    build: ./admin_service
+    container_name: scada_admin
+    environment:
+      API_PORT: 9000
+      DASHBOARD_PORT: 3000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: scada-admin-secret-change-in-prod
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+      - "3000:3000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - scada_network
+  
+  # ===================================================================
+  # SCADA NODE SERVICES (7 nodes)
+  # ===================================================================
+  
+  node_gen001:
+    build: ./node_service
+    container_name: scada_gen001
+    environment:
+      NODE_ID: GEN-001
+      NODE_TYPE: generation
+      UNIT_ID: 1
+      REST_PORT: 8101
+      WS_PORT: 8102
+      MODBUS_PORT: 5020
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8101:8101"
+      - "8102:8102"
+      - "5020:5020"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_gen002:
+    build: ./node_service
+    container_name: scada_gen002
+    environment:
+      NODE_ID: GEN-002
+      NODE_TYPE: generation
+      UNIT_ID: 2
+      REST_PORT: 8103
+      WS_PORT: 8104
+      MODBUS_PORT: 5021
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8103:8103"
+      - "8104:8104"
+      - "5021:5021"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_sub001:
+    build: ./node_service
+    container_name: scada_sub001
+    environment:
+      NODE_ID: SUB-001
+      NODE_TYPE: transmission
+      UNIT_ID: 3
+      REST_PORT: 8111
+      WS_PORT: 8112
+      MODBUS_PORT: 5030
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8111:8111"
+      - "8112:8112"
+      - "5030:5030"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_sub002:
+    build: ./node_service
+    container_name: scada_sub002
+    environment:
+      NODE_ID: SUB-002
+      NODE_TYPE: transmission
+      UNIT_ID: 4
+      REST_PORT: 8113
+      WS_PORT: 8114
+      MODBUS_PORT: 5031
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8113:8113"
+      - "8114:8114"
+      - "5031:5031"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_sub003:
+    build: ./node_service
+    container_name: scada_sub003
+    environment:
+      NODE_ID: SUB-003
+      NODE_TYPE: transmission
+      UNIT_ID: 5
+      REST_PORT: 8115
+      WS_PORT: 8116
+      MODBUS_PORT: 5032
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8115:8115"
+      - "8116:8116"
+      - "5032:5032"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_dist001:
+    build: ./node_service
+    container_name: scada_dist001
+    environment:
+      NODE_ID: DIST-001
+      NODE_TYPE: distribution
+      UNIT_ID: 6
+      REST_PORT: 8131
+      WS_PORT: 8132
+      MODBUS_PORT: 5040
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8131:8131"
+      - "8132:8132"
+      - "5040:5040"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+  
+  node_dist002:
+    build: ./node_service
+    container_name: scada_dist002
+    environment:
+      NODE_ID: DIST-002
+      NODE_TYPE: distribution
+      UNIT_ID: 7
+      REST_PORT: 8133
+      WS_PORT: 8134
+      MODBUS_PORT: 5041
+      MASTER_IP: admin_service
+      MASTER_PORT: 9000
+      DB_URL: postgresql://scada:scada123@timescaledb/scadadb
+      AUTO_CONNECT: "true"
+    ports:
+      - "8133:8133"
+      - "8134:8134"
+      - "5041:5041"
+    depends_on:
+      - admin_service
+    networks:
+      - scada_network
+
+networks:
+  scada_network:
+    driver: bridge
+
+volumes:
+  pgdata:

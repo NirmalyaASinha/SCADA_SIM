@@ -1,0 +1,22 @@
+# Prometheus configuration for SCADA platform monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'scada_nodes'
+    static_configs:
+      - targets:
+          - 'node_gen001:8101'
+          - 'node_gen002:8103'
+          - 'node_sub001:8111'
+          - 'node_sub002:8113'
+          - 'node_sub003:8115'
+          - 'node_dist001:8131'
+          - 'node_dist002:8133'
+  
+  - job_name: 'scada_admin'
+    static_configs:
+      - targets:
+          - 'admin_service:9000'

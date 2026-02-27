@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{NODE_ID}} - Operator Dashboard</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            background: #0a0e1a;
+            color: #e0e0e0;
+        }
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+        }
+        .login-card {
+            background: #151a26;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid #2a3142;
+            min-width: 400px;
+        }
+        .login-card h1 {
+            color: #4ade80;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        .login-card .subtitle {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            background: #0a0e1a;
+            border: 1px solid #2a3142;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: #4ade80;
+            color: #0a0e1a;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover { background: #22c55e; }
+        button:disabled { background: #374151; cursor: not-allowed; }
+        .dashboard {
+            padding: 1rem;
+        }
+        .header {
+            background: #151a26;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #4ade80;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #4ade80;
+            font-size: 1.2rem;
+        }
+        .frequency {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #4ade80;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .card {
+            background: #151a26;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #2a3142;
+        }
+        .card h3 {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        .card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #4ade80;
+        }
+        .card .unit {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+        .status-good { color: #4ade80; }
+        .status-warning { color: #fbbf24; }
+        .status-fault { color: #ef4444; }
+        .control-panel {
+            margin-top: 1rem;
+            background: #151a26;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #2a3142;
+        }
+        .control-btn {
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+            width: auto;
+        }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-success { background: #4ade80; }
+        .error { color: #ef4444; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        const API_BASE = window.location.origin;
+        
+        function App() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [token, setToken] = useState(null);
+            const [nodeInfo, setNodeInfo] = useState({});
+            const [telemetry, setTelemetry] = useState({});
+            const [error, setError] = useState('');
+            
+            useEffect(() => {
+                fetch(`${API_BASE}/`)
+                    .then(r => r.json())
+                    .then(data => setNodeInfo(data));
+            }, []);
+            
+            useEffect(() => {
+                if (!isAuthenticated) return;
+                
+                const interval = setInterval(() => {
+                    fetch(`${API_BASE}/telemetry`)
+                        .then(r => r.json())
+                        .then(data => setTelemetry(data));
+                }, 1000);
+                
+                return () => clearInterval(interval);
+            }, [isAuthenticated]);
+            
+            const handleLogin = async (username, password) => {
+                try {
+                    const res = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        setToken(data.token);
+                        setIsAuthenticated(true);
+                        setError('');
+                    } else {
+                        setError(data.error || 'Login failed');
+                    }
+                } catch (e) {
+                    setError('Connection error');
+                }
+            };
+            
+            const controlBreaker = async (action) => {
+                const reason = prompt(`Reason for breaker ${action}:`);
+                if (!reason) return;
+                
+                try {
+                    const res = await fetch(`${API_BASE}/control/breaker`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ action, reason })
+                    });
+                    const data = await res.json();
+                    if (!data.success) alert('Error: ' + (data.error || 'Failed'));
+                } catch (e) {
+                    alert('Control action failed');
+                }
+            };
+            
+            if (!isAuthenticated) {
+                return <LoginScreen onLogin={handleLogin} nodeInfo={nodeInfo} error={error} />;
+            }
+            
+            return <Dashboard 
+                telemetry={telemetry} 
+                nodeInfo={nodeInfo} 
+                onControlBreaker={controlBreaker}
+            />;
+        }
+        
+        function LoginScreen({ onLogin, nodeInfo, error }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            
+            return (
+                <div className="login-screen">
+                    <div className="login-card">
+                        <h1>{nodeInfo.node_id || 'SCADA NODE'}</h1>
+                        <div className="subtitle">{nodeInfo.node_type || 'Loading...'}</div>
+                        <input 
+                            type="text" 
+                            placeholder="Username"
+                            value={username}
+                            onChange={e => setUsername(e.target.value)}
+                        />
+                        <input 
+                            type="password" 
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            onKeyPress={e => e.key === 'Enter' && onLogin(username, password)}
+                        />
+                        <button onClick={() => onLogin(username, password)}>LOGIN</button>
+                        {error && <div className="error">{error}</div>}
+                    </div>
+                </div>
+            );
+        }
+        
+        function Dashboard({ telemetry, nodeInfo, onControlBreaker }) {
+            const getStatusClass = (value, nominal, threshold) => {
+                if (!value) return '';
+                const diff = Math.abs(value - nominal) / nominal;
+                if (diff > threshold) return 'status-fault';
+                if (diff > threshold / 2) return 'status-warning';
+                return 'status-good';
+            };
+            
+            return (
+                <div className="dashboard">
+                    <div className="header">
+                        <h1>{nodeInfo.node_id} | {nodeInfo.node_type}</h1>
+                        <div className={`frequency ${getStatusClass(telemetry.frequency_hz, 50.0, 0.01)}`}>
+                            {telemetry.frequency_hz?.toFixed(3) || '--'} Hz
+                        </div>
+                    </div>
+                    
+                    <div className="grid">
+                        <div className="card">
+                            <h3>BUS VOLTAGE</h3>
+                            <div className="value">{telemetry.bus_voltage_kv?.toFixed(2) || '--'}</div>
+                            <div className="unit">kV</div>
+                        </div>
+                        
+                        <div className="card">
+                            <h3>LINE CURRENT</h3>
+                            <div className="value">{telemetry.line_current_a?.toFixed(1) || '--'}</div>
+                            <div className="unit">A</div>
+                        </div>
+                        
+                        <div className="card">
+                            <h3>ACTIVE POWER</h3>
+                            <div className="value">{telemetry.active_power_mw?.toFixed(1) || '--'}</div>
+                            <div className="unit">MW</div>
+                        </div>
+                        
+                        <div className="card">
+                            <h3>POWER FACTOR</h3>
+                            <div className="value">{telemetry.power_factor?.toFixed(3) || '--'}</div>
+                            <div className="unit">-</div>
+                        </div>
+                        
+                        {telemetry.transformer_temp_c !== undefined && (
+                            <div className="card">
+                                <h3>TRANSFORMER TEMP</h3>
+                                <div className="value">{telemetry.transformer_temp_c?.toFixed(1) || '--'}</div>
+                                <div className="unit">°C</div>
+                            </div>
+                        )}
+                        
+                        {telemetry.generator_rpm !== undefined && (
+                            <div className="card">
+                                <h3>GENERATOR RPM</h3>
+                                <div className="value">{telemetry.generator_rpm || '--'}</div>
+                                <div className="unit">RPM</div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="control-panel">
+                        <h3>BREAKER CONTROL</h3>
+                        <p>Current State: {telemetry.breaker_state ? '🟢 CLOSED' : '🔴 OPEN'}</p>
+                        {telemetry.breaker_state ? (
+                            <button className="control-btn btn-danger" onClick={() => onControlBreaker('open')}>
+                                OPEN BREAKER
+                            </button>
+                        ) : (
+                            <button className="control-btn btn-success" onClick={() => onControlBreaker('close')}>
+                                CLOSE BREAKER
+                            </button>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
