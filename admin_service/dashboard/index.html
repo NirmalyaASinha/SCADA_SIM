@@ -1726,12 +1726,12 @@
                                 </div>
                             </div>
                             <div style={{textAlign: 'center', minWidth: '250px'}}>
-                                <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>System Frequency</div>
+                                <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem'}}>Power Generated Right Now</div>
                                 <div className="frequency">
-                                    {overview.grid_frequency_hz?.toFixed(2) || '--'} Hz
+                                    {overview.total_generation_mw?.toFixed(0) || '0'} MW
                                 </div>
-                                <div style={{fontSize: '0.75rem', color: overview.grid_frequency_hz >= 49.8 && overview.grid_frequency_hz <= 50.2 ? 'var(--color-green)' : overview.grid_frequency_hz >= 49.5 && overview.grid_frequency_hz <= 50.5 ? 'var(--color-amber)' : 'var(--color-red)', marginTop: '0.25rem'}}>
-                                    {overview.grid_frequency_hz >= 49.8 && overview.grid_frequency_hz <= 50.2 ? '✓ Stable' : overview.grid_frequency_hz >= 49.5 && overview.grid_frequency_hz <= 50.5 ? '⚠ Warning' : '⚠ Critical'}
+                                <div style={{fontSize: '0.75rem', color: overview.total_generation_mw > 1000 ? 'var(--color-green)' : overview.total_generation_mw > 700 ? 'var(--color-amber)' : overview.total_generation_mw > 0 ? 'var(--color-amber)' : 'var(--color-red)', marginTop: '0.25rem'}}>
+                                    {overview.total_generation_mw > 1000 ? '✓ Good Supply' : overview.total_generation_mw > 700 ? '⚠ Moderate' : overview.total_generation_mw > 0 ? '⚠ Low' : '🔴 No Generation'}
                                 </div>
                             </div>
                             <div style={{textAlign: 'right', minWidth: '180px'}}>

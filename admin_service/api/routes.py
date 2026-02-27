@@ -4,7 +4,7 @@ FastAPI application for SCADA Master
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request, Security
@@ -541,13 +541,69 @@ def create_admin_app(admin_service) -> FastAPI:
     # ALARMS & EVENTS
     # =================================================================================
     
+    @app.get("/alarms")
+    async def get_all_alarms(credentials: HTTPAuthorizationCredentials = Security(security)):
+        """Get all alarms (active and acknowledged)"""
+        auth_handler.verify_token(credentials)
+        
+        # Return mock alarm data for testing - in production, query database
+        return [
+            {
+                "id": 1,
+                "node_id": "GEN-001",
+                "priority": "P1",
+                "message": "Overcurrent detected on generator",
+                "timestamp": datetime.now().isoformat(),
+                "acknowledged": False,
+                "acked_by": None,
+                "acked_at": None,
+                "severity": "CRITICAL"
+            },
+            {
+                "id": 2,
+                "node_id": "SUB-001",
+                "priority": "P2",
+                "message": "Voltage deviation warning",
+                "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
+                "acknowledged": False,
+                "acked_by": None,
+                "acked_at": None,
+                "severity": "HIGH"
+            },
+            {
+                "id": 3,
+                "node_id": "DIST-001",
+                "priority": "P3",
+                "message": "Temperature monitoring active",
+                "timestamp": (datetime.now() - timedelta(minutes=15)).isoformat(),
+                "acknowledged": True,
+                "acked_by": "admin",
+                "acked_at": (datetime.now() - timedelta(minutes=10)).isoformat(),
+                "severity": "MEDIUM"
+            }
+        ]
+    
     @app.get("/alarms/active")
     async def get_active_alarms(credentials: HTTPAuthorizationCredentials = Security(security)):
-        """Get all active alarms across all nodes"""
+        """Get all active (unacknowledged) alarms across all nodes"""
         auth_handler.verify_token(credentials)
         
         # Would query database in production
         return []
+    
+    @app.post("/alarms/{alarm_id}/ack")
+    async def acknowledge_alarm(alarm_id: int, body: dict, credentials: HTTPAuthorizationCredentials = Security(security)):
+        """Acknowledge an alarm to clear it from critical alerts"""
+        auth_handler.verify_token(credentials)
+        
+        # In production, update database with acknowledgment
+        return {
+            "status": "acknowledged",
+            "alarm_id": alarm_id,
+            "acked_by": body.get("user", "unknown"),
+            "acked_at": datetime.now().isoformat(),
+            "message": f"Alarm {alarm_id} acknowledged successfully"
+        }
     
     # =================================================================================
     # SECURITY MONITORING
