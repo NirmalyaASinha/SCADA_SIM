@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SCADA Admin - Operations Control Centre</title>
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <style>
         /* ===== DESIGN SYSTEM ===== */
         :root {
@@ -1329,6 +1329,7 @@
         const API_BASE = 'http://localhost:9000';
         
         function App() {
+            console.log('✓ App component initializing');
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [token, setToken] = useState(null);
             const [user, setUser] = useState({});
@@ -1364,6 +1365,7 @@
         }
         
         function LoginScreen({ onLogin, error }) {
+            console.log('✓ LoginScreen component rendering');
             const [username, setUsername] = useState('');
             const [password, setPassword] = useState('');
             const [isLoading, setIsLoading] = useState(false);
@@ -1752,7 +1754,7 @@
                             {activeTab === 'control' && <ControlCenterTab nodes={nodes} token={token} />}
                             {activeTab === 'alarms' && <AlarmsTab alarms={alarms} acknowledgeAlarm={acknowledgeAlarm} />}
                             {activeTab === 'security' && <SecurityTab securityEvents={securityEvents} modbusTransactions={modbusTransactions} />}
-                            {activeTab === 'historian' && <HistorianTab nodes={nodes} />}
+                            {activeTab === 'historian' && <HistorianTab nodes={nodes} token={token} />}
                             {activeTab === 'modbus' && <ModbusMonitorTab modbusTransactions={modbusTransactions} />}
                             {activeTab === 'audit' && <AuditLogTab />}
                             {activeTab === 'settings' && <SettingsTab user={user} />}
@@ -2851,35 +2853,186 @@
         
         
         // ===== HISTORIAN TAB =====
-        function HistorianTab({ nodes }) {
+        function HistorianTab({ nodes, token }) {
+            const [selectedNodes, setSelectedNodes] = useState([]);
+            const [selectedMetrics, setSelectedMetrics] = useState([]);
+            const [timeRange, setTimeRange] = useState('24H');
+            const [chartData, setChartData] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            
+            const metrics = ['Voltage', 'Current', 'Power', 'Frequency', 'Temperature'];
+            const colors = ['#00e676', '#0288d1', '#ffab00', '#ff1744', '#aa44ff'];
+            
+            // Metric to database column mapping
+            const metricDbMap = {
+                'Voltage': 'bus_voltage_kv',
+                'Current': 'line_current_a',
+                'Power': 'active_power_mw',
+                'Frequency': 'frequency_hz',
+                'Temperature': 'transformer_temp_c'
+            };
+            
+            const handleNodeSelect = (e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                setSelectedNodes(selected);
+            };
+            
+            const toggleMetric = (metric) => {
+                setSelectedMetrics(prev => 
+                    prev.includes(metric) 
+                        ? prev.filter(m => m !== metric)
+                        : [...prev, metric]
+                );
+            };
+            
+            const fetchChartData = async () => {
+                if (selectedNodes.length === 0 || selectedMetrics.length === 0) {
+                    setError('Please select at least one node and one metric');
+                    return;
+                }
+                
+                setLoading(true);
+                setError(null);
+                
+                try {
+                    const response = await fetch(
+                        `${API_BASE}/historian/metrics?nodes=${selectedNodes.join(',')}&metrics=${selectedMetrics.join(',')}&time_range=${timeRange}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        }
+                    );
+                    
+                    if (!response.ok) throw new Error('Failed to fetch data');
+                    
+                    const result = await response.json();
+                    
+                    if (result.error) {
+                        setError(result.error);
+                        setChartData([]);
+                        return;
+                    }
+                    
+                    // Transform data for Recharts
+                    const dataByTime = {};
+                    result.data.forEach(row => {
+                        const timestamp = row.time;
+                        if (!dataByTime[timestamp]) {
+                            dataByTime[timestamp] = { time: new Date(timestamp).toLocaleTimeString() };
+                        }
+                        selectedMetrics.forEach(metric => {
+                            const column = metricDbMap[metric];
+                            const key = `${row.node_id}_${metric}`;
+                            dataByTime[timestamp][key] = row[column] || null;
+                        });
+                    });
+                    
+                    const transformed = Object.values(dataByTime).sort((a, b) => 
+                        new Date(a.time) - new Date(b.time)
+                    );
+                    
+                    setChartData(transformed);
+                } catch (err) {
+                    setError(err.message);
+                    setChartData([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            
+            const exportCSV = () => {
+                if (chartData.length === 0) {
+                    alert('No data to export. Please fetch data first.');
+                    return;
+                }
+                
+                try {
+                    // Get token for API call
+                    const token = localStorage.getItem('token');
+                    
+                    // Create CSV from raw data
+                    let csv = 'timestamp,node_id,metric,value\n';
+                    
+                    selectedNodes.forEach(nodeId => {
+                        selectedMetrics.forEach(metric => {
+                            const column = metricDbMap[metric];
+                            chartData.forEach(row => {
+                                const key = `${nodeId}_${metric}`;
+                                const value = row[key];
+                                if (value !== null && value !== undefined) {
+                                    const timestamp = row.time;
+                                    csv += `${timestamp},${nodeId},${metric},${value}\n`;
+                                }
+                            });
+                        });
+                    });
+                    
+                    // Trigger download
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `scada_historian_${new Date().toISOString().split('T')[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } catch (err) {
+                    alert('Failed to export CSV: ' + err.message);
+                }
+            };
+            
+            // Auto-fetch when selections change
+            useEffect(() => {
+                if (selectedNodes.length > 0 && selectedMetrics.length > 0) {
+                    fetchChartData();
+                }
+            }, [selectedNodes, selectedMetrics, timeRange]);
+            
             return (
                 <div style={{padding: '2rem'}}>
                     <h2 style={{marginBottom: '1.5rem', fontSize: '1.5rem'}}>Historian</h2>
                     
                     <div style={{background: 'var(--bg-card)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-normal)'}}>
                         <div style={{marginBottom: '2rem'}}>
-                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem'}}>
-                                SELECT NODES
+                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600}}>
+                                SELECT NODES ({selectedNodes.length} selected)
                             </label>
                             <select 
                                 multiple
-                                style={{width: '100%', padding: '0.75rem', background: 'var(--bg-void)', border: '1px solid var(--border-normal)', color: 'var(--text-primary)', borderRadius: '6px', minHeight: '120px', fontFamily: 'var(--font-mono)'}}
+                                onChange={handleNodeSelect}
+                                value={selectedNodes}
+                                style={{width: '100%', padding: '0.75rem', background: 'var(--bg-void)', border: '1px solid var(--border-normal)', color: 'var(--text-primary)', borderRadius: '6px', minHeight: '120px', fontFamily: 'var(--font-mono)', cursor: 'pointer'}}
                             >
                                 {nodes.map(node => (
-                                    <option key={node.node_id} value={node.node_id}>{node.node_id}</option>
+                                    <option key={node.node_id} value={node.node_id}>{node.node_id} ({node.node_type})</option>
                                 ))}
                             </select>
+                            <div style={{fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.25rem'}}>Hold Ctrl/Cmd to select multiple</div>
                         </div>
                         
                         <div style={{marginBottom: '2rem'}}>
-                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem'}}>
-                                SELECT METRICS
+                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600}}>
+                                SELECT METRICS ({selectedMetrics.length} selected)
                             </label>
                             <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
-                                {['Voltage', 'Current', 'Power', 'Frequency', 'Temperature'].map(metric => (
+                                {metrics.map(metric => (
                                     <button 
                                         key={metric}
-                                        style={{padding: '0.5rem 1rem', background: 'var(--bg-void)', border: '1px solid var(--border-normal)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem'}}
+                                        onClick={() => toggleMetric(metric)}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            background: selectedMetrics.includes(metric) ? 'var(--color-green)' : 'var(--bg-void)',
+                                            border: '1px solid ' + (selectedMetrics.includes(metric) ? 'var(--color-green)' : 'var(--border-normal)'),
+                                            color: selectedMetrics.includes(metric) ? 'var(--bg-void)' : 'var(--text-primary)',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.85rem',
+                                            fontWeight: selectedMetrics.includes(metric) ? 600 : 400,
+                                            transition: 'all 0.2s'
+                                        }}
                                     >
                                         {metric}
                                     </button>
@@ -2888,14 +3041,25 @@
                         </div>
                         
                         <div style={{marginBottom: '2rem'}}>
-                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem'}}>
+                            <label style={{display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600}}>
                                 TIME RANGE
                             </label>
                             <div style={{display: 'flex', gap: '0.5rem'}}>
                                 {['15m', '1H', '6H', '24H', '7D'].map(range => (
                                     <button 
                                         key={range}
-                                        style={{padding: '0.5rem 1rem', background: 'var(--color-green)', color: 'var(--bg-void)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem'}}
+                                        onClick={() => setTimeRange(range)}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            background: timeRange === range ? 'var(--color-green)' : 'var(--bg-void)',
+                                            border: '1px solid ' + (timeRange === range ? 'var(--color-green)' : 'var(--border-normal)'),
+                                            color: timeRange === range ? 'var(--bg-void)' : 'var(--text-primary)',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontWeight: timeRange === range ? 600 : 400,
+                                            fontSize: '0.85rem',
+                                            transition: 'all 0.2s'
+                                        }}
                                     >
                                         {range}
                                     </button>
@@ -2903,13 +3067,119 @@
                             </div>
                         </div>
                         
-                        <div style={{background: 'var(--bg-panel)', padding: '4rem 2rem', borderRadius: '6px', textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem'}}>
-                            <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>📊</div>
-                            Chart visualization will appear here
-                        </div>
+                        {error && (
+                            <div style={{background: 'rgba(255, 23, 68, 0.1)', border: '1px solid var(--color-red)', color: 'var(--color-red)', padding: '0.75rem', borderRadius: '4px', marginBottom: '2rem', fontSize: '0.85rem'}}>
+                                ⚠️ {error}
+                            </div>
+                        )}
                         
-                        <button style={{width: '100%', padding: '0.75rem', background: 'var(--color-green)', color: 'var(--bg-void)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontFamily: 'var(--font-display)', fontSize: '1rem'}}>
-                            📥 EXPORT CSV
+                        {loading && (
+                            <div style={{background: 'var(--bg-panel)', padding: '4rem 2rem', borderRadius: '6px', textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem'}}>
+                                <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>⏳</div>
+                                Fetching data...
+                            </div>
+                        )}
+                        
+                        {!loading && chartData.length > 0 && (
+                            <div style={{background: 'var(--bg-panel)', padding: '2rem', borderRadius: '6px', marginBottom: '2rem', overflowX: 'auto'}}>
+                                <div id="chart-container" style={{width: '100%', height: '400px'}}>
+                                    {selectedNodes.length > 0 && selectedMetrics.length > 0 && (
+                                        <svg viewBox="0 0 900 400" style={{width: '100%', height: '100%', background: 'var(--bg-panel)'}}>
+                                            {/* Render simple line chart */}
+                                            <defs>
+                                                {selectedNodes.map((node, nodeIdx) => 
+                                                    colors.map((_, metricIdx) => (
+                                                        <linearGradient key={node + metricIdx} id={`grad_${nodeIdx}_${metricIdx}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                                            <stop offset="0%" stopColor={colors[metricIdx]} stopOpacity="0.3" />
+                                                            <stop offset="100%" stopColor={colors[metricIdx]} stopOpacity="0.05" />
+                                                        </linearGradient>
+                                                    ))
+                                                )}
+                                            </defs>
+                                            
+                                            {/* Grid lines */}
+                                            {[0, 1, 2, 3, 4].map(i => (
+                                                <line key={i} x1="50" y1={50 + i * 70} x2="850" y2={50 + i * 70} stroke="var(--border-normal)" strokeOpacity="0.3" strokeDasharray="5,5" />
+                                            ))}
+                                            
+                                            {/* Plot lines for each selected node-metric combination */}
+                                            {selectedNodes.length > 0 && selectedMetrics.map((metric, metricIdx) => {
+                                                const points = [];
+                                                const maxValue = Math.max(...chartData.map((row, idx) => row[`${selectedNodes[0]}_${metric}`] || 0), 1);
+                                                
+                                                chartData.forEach((row, idx) => {
+                                                    const x = 50 + (idx / (chartData.length - 1 || 1)) * 800;
+                                                    const value = row[`${selectedNodes[0]}_${metric}`];
+                                                    if (value !== null && value !== undefined) {
+                                                        const y = 350 - (value / maxValue) * 300;
+                                                        points.push(`${x},${y}`);
+                                                    }
+                                                });
+                                                
+                                                return (
+                                                    <polyline 
+                                                        key={metric}
+                                                        points={points.join(' ')}
+                                                        fill="none"
+                                                        stroke={colors[metricIdx]}
+                                                        strokeWidth="2"
+                                                    />
+                                                );
+                                            })}
+                                            
+                                            {/* Axis labels */}
+                                            <text x="20" y="360" fontSize="12" fill="var(--text-secondary)">0</text>
+                                            <text x="20" y="200" fontSize="12" fill="var(--text-secondary)">50%</text>
+                                            <text x="870" y="370" fontSize="12" fill="var(--text-secondary)" textAnchor="end">Now</text>
+                                        </svg>
+                                    )}
+                                </div>
+                                
+                                {/* Legend */}
+                                <div style={{marginTop: '1rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '0.85rem'}}>
+                                    {selectedMetrics.map((metric, idx) => (
+                                        <div key={metric} style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                                            <div style={{width: '12px', height: '12px', background: colors[idx], borderRadius: '2px'}} />
+                                            <span style={{color: 'var(--text-secondary)'}}>{metric} ({chartData.length} points)</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {!loading && chartData.length === 0 && selectedNodes.length > 0 && selectedMetrics.length > 0 && (
+                            <div style={{background: 'var(--bg-panel)', padding: '4rem 2rem', borderRadius: '6px', textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem'}}>
+                                <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>📊</div>
+                                No data available for selected parameters. Try expanding the time range.
+                            </div>
+                        )}
+                        
+                        {!loading && chartData.length === 0 && (selectedNodes.length === 0 || selectedMetrics.length === 0) && (
+                            <div style={{background: 'var(--bg-panel)', padding: '4rem 2rem', borderRadius: '6px', textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '2rem'}}>
+                                <div style={{fontSize: '1.5rem', marginBottom: '0.5rem'}}>📊</div>
+                                Select nodes and metrics to view chart
+                            </div>
+                        )}
+                        
+                        <button 
+                            onClick={exportCSV}
+                            disabled={chartData.length === 0}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                background: chartData.length === 0 ? 'var(--border-normal)' : 'var(--color-green)',
+                                color: chartData.length === 0 ? 'var(--text-secondary)' : 'var(--bg-void)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: chartData.length === 0 ? 'not-allowed' : 'pointer',
+                                fontWeight: 700,
+                                fontFamily: 'var(--font-display)',
+                                fontSize: '1rem',
+                                transition: 'all 0.2s',
+                                opacity: chartData.length === 0 ? 0.5 : 1
+                            }}
+                        >
+                            📥 EXPORT CSV ({chartData.length} rows)
                         </button>
                     </div>
                 </div>
@@ -3066,7 +3336,11 @@
         }
         
         
-        ReactDOM.render(<App />, document.getElementById('root'));
+        console.log('✓ Starting React DOM render...');
+        const rootElement = document.getElementById('root');
+        console.log('✓ Root element found:', rootElement);
+        ReactDOM.render(<App />, rootElement);
+        console.log('✓ React DOM render complete');
     </script>
 </body>
 </html>

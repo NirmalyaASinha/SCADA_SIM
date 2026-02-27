@@ -606,6 +606,107 @@ def create_admin_app(admin_service) -> FastAPI:
         }
     
     # =================================================================================
+    # HISTORIAN - HISTORICAL METRICS QUERIES
+    # =================================================================================
+    
+    @app.get("/historian/metrics")
+    async def get_historical_metrics(
+        nodes: str = None,
+        metrics: str = None,
+        time_range: str = "24H",
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """
+        Fetch historical metrics for selected nodes and metrics over time range.
+        
+        Query params:
+        - nodes: comma-separated list of node IDs (e.g., "GEN-001,SUB-001")
+        - metrics: comma-separated list of metrics (e.g., "Voltage,Power,Frequency")
+            Valid: Voltage | Current | Power | Frequency | Temperature
+        - time_range: "15m" | "1H" | "6H" | "24H" | "7D"
+        """
+        auth_handler.verify_token(credentials)
+        
+        if not admin_service.db_engine:
+            return {"error": "Database not available", "data": []}
+        
+        # Parse inputs
+        node_list = [n.strip() for n in (nodes or "").split(",") if n.strip()]
+        metric_list = [m.strip() for m in (metrics or "").split(",") if m.strip()]
+        
+        if not node_list or not metric_list:
+            return {"error": "nodes and metrics parameters are required", "data": []}
+        
+        # Map metric names to database columns
+        metric_mapping = {
+            "Voltage": "bus_voltage_kv",
+            "Current": "line_current_a",
+            "Power": "active_power_mw",
+            "Frequency": "frequency_hz",
+            "Temperature": "transformer_temp_c"
+        }
+        
+        # Validate metrics
+        db_columns = [metric_mapping.get(m) for m in metric_list if m in metric_mapping]
+        if not db_columns:
+            return {"error": f"Invalid metrics. Valid: {', '.join(metric_mapping.keys())}", "data": []}
+        
+        # Calculate time window
+        time_windows = {
+            "15m": "15 minutes",
+            "1H": "1 hour",
+            "6H": "6 hours",
+            "24H": "24 hours",
+            "7D": "7 days"
+        }
+        window = time_windows.get(time_range, "24 hours")
+        
+        # Build SQL query to fetch telemetry data
+        columns_str = ", ".join(["time", "node_id"] + db_columns)
+        node_placeholders = ", ".join([f"'{n}'" for n in node_list])
+        
+        query = f"""
+            SELECT {columns_str}
+            FROM node_telemetry
+            WHERE node_id IN ({node_placeholders})
+            AND time > NOW() - INTERVAL '{window}'
+            ORDER BY node_id, time ASC
+        """
+        
+        try:
+            async with admin_service.db_engine.connect() as conn:
+                result = await conn.execute(text(query))
+                rows = result.fetchall()
+            
+            # Transform into chart-friendly format
+            # Return data as list of dicts with timestamp, node_id, and metric values
+            data = []
+            for row in rows:
+                row_dict = dict(row._mapping) if hasattr(row, '_mapping') else dict(zip(
+                    ["time", "node_id"] + db_columns, row
+                ))
+                # Format timestamp
+                if 'time' in row_dict:
+                    row_dict['time'] = row_dict['time'].isoformat() if hasattr(row_dict['time'], 'isoformat') else str(row_dict['time'])
+                data.append(row_dict)
+            
+            return {
+                "status": "success",
+                "node_ids": node_list,
+                "metrics": metric_list,
+                "time_range": time_range,
+                "data": data,
+                "count": len(data)
+            }
+        
+        except Exception as e:
+            logger.error(f"Error querying historian: {e}")
+            return {
+                "error": f"Query failed: {str(e)}",
+                "data": []
+            }
+    
+    # =================================================================================
     # SECURITY MONITORING
     # =================================================================================
     
