@@ -193,3 +193,20 @@ class AuditEntry(BaseModel):
 class AuditListResponse(BaseModel):
     entries: List[AuditEntry]
     total: int
+
+
+# New control schemas for advanced features
+class VoltageAdjustRequest(BaseModel):
+    voltage_kv: float
+    reason: str
+    password: str = ""
+
+
+class StandbyRequest(BaseModel):
+    reason: str
+    duration_minutes: int = 60
+
+
+class IsolateRequest(BaseModel):
+    reason: str = "Emergency Isolation"
+    force: bool = False

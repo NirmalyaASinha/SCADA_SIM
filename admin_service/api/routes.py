@@ -150,6 +150,27 @@ def create_admin_app(admin_service) -> FastAPI:
         
         return nodes
     
+    @app.get("/nodes/map")
+    async def get_node_map(credentials: HTTPAuthorizationCredentials = Security(security)):
+        """Get node locations for map visualization"""
+        auth_handler.verify_token(credentials)
+        
+        locations = admin_service.aggregator.get_node_locations()
+        
+        # Enhance with current state
+        enhanced = {}
+        for node_id, location in locations.items():
+            state = admin_service.aggregator.get_node_state(node_id)
+            telemetry = admin_service.aggregator.get_latest(node_id)
+            enhanced[node_id] = {
+                **location,
+                'state': state if state != 'UNKNOWN' else (telemetry.get('node_state', 'ONLINE') if telemetry else 'UNKNOWN'),
+                'voltage_kv': telemetry.get('bus_voltage_kv', 0) if telemetry else 0,
+                'power_mw': telemetry.get('active_power_mw', 0) if telemetry else 0
+            }
+        
+        return enhanced
+    
     @app.get("/nodes/{node_id}")
     async def get_node(node_id: str, credentials: HTTPAuthorizationCredentials = Security(security)):
         """Get node details"""
@@ -224,6 +245,8 @@ def create_admin_app(admin_service) -> FastAPI:
         if payload.get('role') not in ['admin', 'engineer']:
             raise HTTPException(status_code=403, detail="Insufficient permissions")
         
+        # Set node state to ISOLATED
+        admin_service.aggregator.set_node_state(node_id, 'ISOLATED')
         logger.warning(f"Node {node_id} ISOLATED by {payload['sub']}: {request.reason}")
         
         return {
@@ -232,6 +255,117 @@ def create_admin_app(admin_service) -> FastAPI:
             "action": "isolated",
             "reason": request.reason,
             "message": f"Node {node_id} has been physically and logically isolated from the grid."
+        }
+    
+    @app.post("/nodes/{node_id}/voltage")
+    async def adjust_node_voltage(
+        node_id: str,
+        request: VoltageAdjustRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Adjust node voltage with threshold checking"""
+        payload = auth_handler.verify_token(credentials)
+        
+        if payload.get('role') not in ['admin', 'engineer']:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        thresholds = admin_service.aggregator.get_voltage_threshold(node_id)
+        
+        # Check if voltage exceeds safe threshold
+        if request.voltage_kv > thresholds['safe_max']:
+            # Require password verification for high voltage
+            if not request.password:
+                return {
+                    "status": "requires_password",
+                    "message": f"Voltage {request.voltage_kv} kV exceeds safe threshold {thresholds['safe_max']} kV. Password required.",
+                    "threshold": thresholds['safe_max'],
+                    "requested": request.voltage_kv
+                }
+            
+            # Verify password
+            user_data = auth_handler.users.get(payload['sub'], {})
+            if request.password != user_data.get('password'):
+                logger.warning(f"Invalid password attempt for {node_id} voltage adjustment by {payload['sub']}")
+                raise HTTPException(status_code=401, detail="Invalid password")
+        
+        # Check hard maximum
+        if request.voltage_kv > thresholds['max']:
+            raise HTTPException(status_code=400, detail=f"Voltage {request.voltage_kv} exceeds hard maximum {thresholds['max']}")
+        
+        logger.info(f"Voltage adjusted for {node_id} to {request.voltage_kv} kV by {payload['sub']}")
+        
+        return {
+            "status": "success",
+            "node_id": node_id,
+            "voltage_kv": request.voltage_kv,
+            "threshold": thresholds['safe_max'],
+            "message": f"Voltage adjusted to {request.voltage_kv} kV"
+        }
+    
+    @app.post("/nodes/{node_id}/standby")
+    async def standby_node(
+        node_id: str,
+        request: StandbyRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Put node on standby (admin only)"""
+        payload = auth_handler.verify_token(credentials)
+        
+        if payload.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Only admin can put nodes on standby")
+        
+        admin_service.aggregator.set_node_state(node_id, 'STANDBY')
+        logger.info(f"Node {node_id} put on standby for {request.duration_minutes} min by {payload['sub']}: {request.reason}")
+        
+        return {
+            "status": "success",
+            "node_id": node_id,
+            "state": "STANDBY",
+            "duration_minutes": request.duration_minutes,
+            "message": f"Node {node_id} is now on standby"
+        }
+    
+    @app.post("/nodes/{node_id}/start")
+    async def start_node(
+        node_id: str,
+        request: StartNodeRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Start node from standby (admin only)"""
+        payload = auth_handler.verify_token(credentials)
+        
+        if payload.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Only admin can start nodes")
+        
+        admin_service.aggregator.set_node_state(node_id, 'ONLINE')
+        logger.info(f"Node {node_id} started by {payload['sub']}: {request.reason}")
+        
+        return {
+            "status": "success",
+            "node_id": node_id,
+            "state": "ONLINE",
+            "message": f"Node {node_id} is now online"
+        }
+    
+    @app.get("/nodes/{node_id}/voltage/threshold")
+    async def get_voltage_threshold(
+        node_id: str,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Get voltage thresholds for a node"""
+        auth_handler.verify_token(credentials)
+        
+        thresholds = admin_service.aggregator.get_voltage_threshold(node_id)
+        telemetry = admin_service.aggregator.get_latest(node_id)
+        current_voltage = telemetry.get('bus_voltage_kv', 0) if telemetry else 0
+        
+        return {
+            "node_id": node_id,
+            "current_voltage_kv": current_voltage,
+            "min_voltage_kv": thresholds['min'],
+            "safe_max_voltage_kv": thresholds['safe_max'],
+            "hard_max_voltage_kv": thresholds['max'],
+            "requires_password_above": thresholds['safe_max']
         }
     
     # =================================================================================

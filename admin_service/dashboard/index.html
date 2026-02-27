@@ -220,6 +220,129 @@
             min-width: 60px;
             text-align: center;
         }
+        .standby-btn {
+            padding: 0.4rem 0.8rem;
+            background: #f59e0b;
+            color: #0a0e1a;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            font-family: inherit;
+            margin-left: 0.5rem;
+        }
+        .standby-btn:hover {
+            background: #d97706;
+        }
+        .start-btn {
+            padding: 0.4rem 0.8rem;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            font-family: inherit;
+            margin-left: 0.5rem;
+        }
+        .start-btn:hover {
+            background: #059669;
+        }
+        .node-map {
+            background: #151a26;
+            border: 1px solid #2a3142;
+            border-radius: 6px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            min-height: 400px;
+        }
+        .node-map svg {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+        }
+        .map-node {
+            cursor: pointer;
+        }
+        .map-node-circle {
+            stroke-width: 2;
+        }
+        .map-node-circle.online {
+            fill: #10b981;
+        }
+        .map-node-circle.standby {
+            fill: #f59e0b;
+        }
+        .map-node-circle.isolated {
+            fill: #ef4444;
+        }
+        .password-modal {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .password-modal-content {
+            background: #151a26;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #2a3142;
+            max-width: 500px;
+            width: 90%;
+        }
+        .password-modal-content h2 {
+            color: #4ade80;
+            margin-bottom: 1rem;
+        }
+        .password-modal-content p {
+            color: #9ca3af;
+            margin-bottom: 1rem;
+        }
+        .password-modal-content input {
+            width: 100%;
+            padding: 0.875rem;
+            margin-bottom: 1rem;
+            background: #0a0e1a;
+            border: 1px solid #2a3142;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        .password-modal-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        .password-modal-buttons button {
+            flex: 1;
+            padding: 0.875rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .password-modal-buttons .confirm-btn {
+            background: #4ade80;
+            color: #0a0e1a;
+        }
+        .password-modal-buttons .confirm-btn:hover {
+            background: #22c55e;
+        }
+        .password-modal-buttons .cancel-btn {
+            background: #6b7280;
+            color: white;
+        }
+        .password-modal-buttons .cancel-btn:hover {
+            background: #4b5563;
+        }
     </style>
 </head>
 <body>
@@ -404,6 +527,47 @@
         
         function NodesTab({ nodes, token }) {
             const [isolateLoading, setIsolateLoading] = useState({});
+            const [standbyLoading, setStandbyLoading] = useState({});
+            const [startLoading, setStartLoading] = useState({});
+            const [nodeMap, setNodeMap] = useState({});
+            const [passwordModal, setPasswordModal] = useState(null);
+            const [modalPassword, setModalPassword] = useState('');
+            const [nodeThresholds, setNodeThresholds] = useState({});
+            
+            useEffect(() => {
+                const fetchNodeMap = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/nodes/map`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const data = await res.json();
+                        setNodeMap(data);
+                    } catch (e) {
+                        console.error('Failed to fetch node map:', e);
+                    }
+                };
+                
+                const fetchThresholds = async () => {
+                    const thresholds = {};
+                    for (const node of nodes) {
+                        try {
+                            const res = await fetch(`${API_BASE}/nodes/${node.node_id}/voltage/threshold`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const data = await res.json();
+                            thresholds[node.node_id] = data;
+                        } catch (e) {
+                            console.error(`Failed to fetch threshold for ${node.node_id}:`, e);
+                        }
+                    }
+                    setNodeThresholds(thresholds);
+                };
+                
+                fetchNodeMap();
+                if (nodes.length > 0) {
+                    fetchThresholds();
+                }
+            }, [nodes, token]);
             
             const handleIsolateNode = async (nodeId) => {
                 if (!window.confirm(`⚠️ CRITICAL: Isolate node ${nodeId}? This will immediately trip all breakers!`)) {
@@ -429,41 +593,268 @@
                 }
             };
             
+            const handleStandbyNode = async (nodeId) => {
+                if (!window.confirm(`Put node ${nodeId} on standby?`)) {
+                    return;
+                }
+                
+                setStandbyLoading(prev => ({ ...prev, [nodeId]: true }));
+                try {
+                    const res = await fetch(`${API_BASE}/nodes/${nodeId}/standby`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason: 'Admin Standby', duration_minutes: 60 })
+                    });
+                    const data = await res.json();
+                    alert(`✅ Node ${nodeId} is now on standby`);
+                } catch (e) {
+                    alert('❌ Failed to put node on standby: ' + e.message);
+                } finally {
+                    setStandbyLoading(prev => ({ ...prev, [nodeId]: false }));
+                }
+            };
+            
+            const handleStartNode = async (nodeId) => {
+                if (!window.confirm(`Start node ${nodeId} from standby?`)) {
+                    return;
+                }
+                
+                setStartLoading(prev => ({ ...prev, [nodeId]: true }));
+                try {
+                    const res = await fetch(`${API_BASE}/nodes/${nodeId}/start`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason: 'Admin Start' })
+                    });
+                    const data = await res.json();
+                    alert(`✅ Node ${nodeId} is back online`);
+                } catch (e) {
+                    alert('❌ Failed to start node: ' + e.message);
+                } finally {
+                    setStartLoading(prev => ({ ...prev, [nodeId]: false }));
+                }
+            };
+            
+            const handleVoltageAdjust = async (nodeId, newVoltage) => {
+                const thresholds = nodeThresholds[nodeId];
+                if (!thresholds) {
+                    alert('Thresholds not loaded yet');
+                    return;
+                }
+                
+                if (newVoltage < thresholds.min_voltage_kv || newVoltage > thresholds.hard_max_voltage_kv) {
+                    alert(`Voltage must be between ${thresholds.min_voltage_kv} and ${thresholds.hard_max_voltage_kv} kV`);
+                    return;
+                }
+                
+                // If above safe threshold, show password modal
+                if (newVoltage > thresholds.safe_max_voltage_kv) {
+                    setPasswordModal({ 
+                        nodeId, 
+                        newVoltage, 
+                        safeMax: thresholds.safe_max_voltage_kv 
+                    });
+                    return;
+                }
+                
+                // Otherwise, proceed without password
+                await submitVoltageAdjust(nodeId, newVoltage, '');
+            };
+            
+            const submitVoltageAdjust = async (nodeId, newVoltage, password) => {
+                try {
+                    const res = await fetch(`${API_BASE}/nodes/${nodeId}/voltage`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            voltage_kv: newVoltage, 
+                            reason: 'Admin Adjustment',
+                            password: password || ''
+                        })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.status === 'requires_password') {
+                        setPasswordModal({
+                            nodeId,
+                            newVoltage,
+                            safeMax: data.threshold
+                        });
+                        return;
+                    }
+                    
+                    alert(`✅ Voltage adjusted to ${newVoltage} kV`);
+                    setPasswordModal(null);
+                    setModalPassword('');
+                } catch (e) {
+                    alert('❌ Failed to adjust voltage: ' + e.message);
+                    setPasswordModal(null);
+                    setModalPassword('');
+                }
+            };
+            
+            const handlePasswordSubmit = async () => {
+                if (!passwordModal) return;
+                
+                await submitVoltageAdjust(passwordModal.nodeId, passwordModal.newVoltage, modalPassword);
+            };
+            
             return (
-                <div className="nodes-grid">
-                    {nodes.map(node => (
-                        <div key={node.node_id} className="node-card">
-                            <h3>{node.node_id}</h3>
-                            <p>Type: {node.node_type}</p>
-                            <p>IP: {node.ip}:{node.rest_port}</p>
-                            <p>
-                                Status: <span className={`node-status status-${node.status.toLowerCase()}`}>
-                                    {node.status}
-                                </span>
-                            </p>
-                            {node.latest_telemetry && (
-                                <>
-                                    <p>Power: {node.latest_telemetry.active_power_mw?.toFixed(1)} MW</p>
-                                    <p>Voltage: {node.latest_telemetry.bus_voltage_kv?.toFixed(2)} kV</p>
-                                </>
-                            )}
-                            <div className="node-actions">
-                                <button 
-                                    className="isolate-btn"
-                                    onClick={() => handleIsolateNode(node.node_id)}
-                                    disabled={isolateLoading[node.node_id]}
-                                >
-                                    {isolateLoading[node.node_id] ? '⏳ ISOLATING...' : '⚠️ ISOLATE NODE'}
-                                </button>
-                                <div className="voltage-control" style={{marginLeft: 'auto'}}>
-                                    <button className="voltage-btn">−</button>
-                                    <span className="voltage-display">{node.latest_telemetry?.bus_voltage_kv?.toFixed(1) || '--'} kV</span>
-                                    <button className="voltage-btn">+</button>
+                <>
+                    {Object.keys(nodeMap).length > 0 && (
+                        <div className="node-map">
+                            <svg viewBox="0 0 400 400" style={{ border: '1px solid #2a3142', borderRadius: '4px' }}>
+                                {/* Grid background */}
+                                <defs>
+                                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2a3142" strokeWidth="0.5" opacity="0.3"/>
+                                    </pattern>
+                                </defs>
+                                <rect width="400" height="400" fill="url(#grid)" />
+                                
+                                {/* Nodes */}
+                                {Object.entries(nodeMap).map(([nodeId, location]) => (
+                                    <g key={nodeId} className="map-node" onClick={() => console.log(`Clicked: ${nodeId}`)}>
+                                        <circle 
+                                            cx={location.x} 
+                                            cy={location.y} 
+                                            r="8"
+                                            className={`map-node-circle ${location.state?.toLowerCase() || 'online'}`}
+                                        />
+                                        <text 
+                                            x={location.x} 
+                                            y={location.y + 20} 
+                                            textAnchor="middle" 
+                                            fill="#e0e0e0" 
+                                            fontSize="11"
+                                            fontFamily="inherit"
+                                        >
+                                            {location.label}
+                                        </text>
+                                        <text 
+                                            x={location.x} 
+                                            y={location.y + 32} 
+                                            textAnchor="middle" 
+                                            fill="#9ca3af" 
+                                            fontSize="9"
+                                            fontFamily="inherit"
+                                        >
+                                            {location.voltage_kv?.toFixed(1)}kV
+                                        </text>
+                                    </g>
+                                ))}
+                            </svg>
+                        </div>
+                    )}
+                    
+                    <div className="nodes-grid">
+                        {nodes.map(node => (
+                            <div key={node.node_id} className="node-card">
+                                <h3>{node.node_id}</h3>
+                                <p>Type: {node.node_type}</p>
+                                <p>IP: {node.ip}:{node.rest_port}</p>
+                                <p>
+                                    Status: <span className={`node-status status-${node.status.toLowerCase()}`}>
+                                        {node.status}
+                                    </span>
+                                </p>
+                                {node.latest_telemetry && (
+                                    <>
+                                        <p>Power: {node.latest_telemetry.active_power_mw?.toFixed(1)} MW</p>
+                                        <p>Voltage: {node.latest_telemetry.bus_voltage_kv?.toFixed(2)} kV</p>
+                                    </>
+                                )}
+                                <div className="node-actions">
+                                    <button 
+                                        className="isolate-btn"
+                                        onClick={() => handleIsolateNode(node.node_id)}
+                                        disabled={isolateLoading[node.node_id]}
+                                    >
+                                        {isolateLoading[node.node_id] ? '⏳ ISOLATING...' : '⚠️ ISOLATE'}
+                                    </button>
+                                    <button 
+                                        className="standby-btn"
+                                        onClick={() => handleStandbyNode(node.node_id)}
+                                        disabled={standbyLoading[node.node_id]}
+                                    >
+                                        {standbyLoading[node.node_id] ? '⏳...' : '⏸️ STANDBY'}
+                                    </button>
+                                    <button 
+                                        className="start-btn"
+                                        onClick={() => handleStartNode(node.node_id)}
+                                        disabled={startLoading[node.node_id]}
+                                    >
+                                        {startLoading[node.node_id] ? '⏳...' : '▶️ START'}
+                                    </button>
+                                    <div className="voltage-control">
+                                        <button 
+                                            className="voltage-btn"
+                                            onClick={() => {
+                                                const current = node.latest_telemetry?.bus_voltage_kv || 0;
+                                                handleVoltageAdjust(node.node_id, current - 5);
+                                            }}
+                                        >
+                                            −
+                                        </button>
+                                        <span className="voltage-display">{node.latest_telemetry?.bus_voltage_kv?.toFixed(1) || '--'} kV</span>
+                                        <button 
+                                            className="voltage-btn"
+                                            onClick={() => {
+                                                const current = node.latest_telemetry?.bus_voltage_kv || 0;
+                                                handleVoltageAdjust(node.node_id, current + 5);
+                                            }}
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {passwordModal && (
+                        <div className="password-modal">
+                            <div className="password-modal-content">
+                                <h2>⚠️ Voltage Threshold Override</h2>
+                                <p>Requested voltage {passwordModal.newVoltage} kV exceeds safe threshold of {passwordModal.safeMax} kV</p>
+                                <p>Enter your password to confirm this action:</p>
+                                <input 
+                                    type="password" 
+                                    placeholder="Password"
+                                    value={modalPassword}
+                                    onChange={(e) => setModalPassword(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                                />
+                                <div className="password-modal-buttons">
+                                    <button 
+                                        className="confirm-btn"
+                                        onClick={handlePasswordSubmit}
+                                    >
+                                        CONFIRM
+                                    </button>
+                                    <button 
+                                        className="cancel-btn"
+                                        onClick={() => {
+                                            setPasswordModal(null);
+                                            setModalPassword('');
+                                        }}
+                                    >
+                                        CANCEL
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    ))}
-                </div>
+                    )}
+                </>
             );
         }
         

@@ -138,6 +138,103 @@
         .btn-danger:hover { background: #dc2626; }
         .btn-success { background: #4ade80; }
         .error { color: #ef4444; margin-top: 0.5rem; }
+        .standby-btn {
+            background: #f59e0b;
+            color: #0a0e1a;
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+            width: auto;
+        }
+        .standby-btn:hover {
+            background: #d97706;
+        }
+        .voltage-control-btn {
+            padding: 0.5rem 0.75rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            font-family: inherit;
+            margin: 0 0.25rem;
+        }
+        .voltage-control-btn:hover {
+            background: #1d4ed8;
+        }
+        .voltage-display-text {
+            color: #4ade80;
+            font-size: 0.9rem;
+            min-width: 60px;
+            text-align: center;
+            display: inline-block;
+        }
+        .password-modal {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .password-modal-content {
+            background: #151a26;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #2a3142;
+            max-width: 500px;
+            width: 90%;
+        }
+        .password-modal-content h2 {
+            color: #4ade80;
+            margin-bottom: 1rem;
+        }
+        .password-modal-content p {
+            color: #9ca3af;
+            margin-bottom: 1rem;
+        }
+        .password-modal-content input {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            background: #0a0e1a;
+            border: 1px solid #2a3142;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        .password-modal-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        .password-modal-buttons button {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .password-modal-buttons .confirm-btn {
+            background: #4ade80;
+            color: #0a0e1a;
+        }
+        .password-modal-buttons .confirm-btn:hover {
+            background: #22c55e;
+        }
+        .password-modal-buttons .cancel-btn {
+            background: #6b7280;
+            color: white;
+        }
+        .password-modal-buttons .cancel-btn:hover {
+            background: #4b5563;
+        }
     </style>
 </head>
 <body>
@@ -222,6 +319,7 @@
                 telemetry={telemetry} 
                 nodeInfo={nodeInfo} 
                 onControlBreaker={controlBreaker}
+                token={token}
             />;
         }
         
@@ -254,8 +352,30 @@
             );
         }
         
-        function Dashboard({ telemetry, nodeInfo, onControlBreaker }) {
+        function Dashboard({ telemetry, nodeInfo, onControlBreaker, token }) {
             const [isolateLoading, setIsolateLoading] = useState(false);
+            const [standbyLoading, setStandbyLoading] = useState(false);
+            const [voltageThresholds, setVoltageThresholds] = useState(null);
+            const [passwordModal, setPasswordModal] = useState(null);
+            const [modalPassword, setModalPassword] = useState('');
+            
+            useEffect(() => {
+                const fetchThresholds = async () => {
+                    try {
+                        const res = await fetch(`http://localhost:9000/nodes/${nodeInfo.node_id}/voltage/threshold`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const data = await res.json();
+                        setVoltageThresholds(data);
+                    } catch (e) {
+                        console.error('Failed to fetch voltage thresholds:', e);
+                    }
+                };
+                
+                if (token && nodeInfo.node_id) {
+                    fetchThresholds();
+                }
+            }, [token, nodeInfo]);
             
             const handleIsolateNode = async () => {
                 if (!window.confirm(`⚠️ CRITICAL: Isolate this node (${nodeInfo.node_id})? This will immediately trip all breakers!`)) {
@@ -276,6 +396,94 @@
                 } finally {
                     setIsolateLoading(false);
                 }
+            };
+            
+            const handleStandbyNode = async () => {
+                if (!window.confirm(`Put this node on standby?`)) {
+                    return;
+                }
+                
+                setStandbyLoading(true);
+                try {
+                    const res = await fetch(`http://localhost:9000/nodes/${nodeInfo.node_id}/standby`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason: 'Operator Standby', duration_minutes: 60 })
+                    });
+                    const data = await res.json();
+                    alert(`✅ Node is now on standby`);
+                } catch (e) {
+                    alert('❌ Failed to put node on standby: ' + e.message);
+                } finally {
+                    setStandbyLoading(false);
+                }
+            };
+            
+            const handleVoltageAdjust = async (newVoltage) => {
+                if (!voltageThresholds) {
+                    alert('Thresholds not loaded yet');
+                    return;
+                }
+                
+                if (newVoltage < voltageThresholds.min_voltage_kv || newVoltage > voltageThresholds.hard_max_voltage_kv) {
+                    alert(`Voltage must be between ${voltageThresholds.min_voltage_kv} and ${voltageThresholds.hard_max_voltage_kv} kV`);
+                    return;
+                }
+                
+                // If above safe threshold, show password modal
+                if (newVoltage > voltageThresholds.safe_max_voltage_kv) {
+                    setPasswordModal({ 
+                        newVoltage, 
+                        safeMax: voltageThresholds.safe_max_voltage_kv 
+                    });
+                    return;
+                }
+                
+                // Otherwise, proceed without password
+                await submitVoltageAdjust(newVoltage, '');
+            };
+            
+            const submitVoltageAdjust = async (newVoltage, password) => {
+                try {
+                    const res = await fetch(`http://localhost:9000/nodes/${nodeInfo.node_id}/voltage`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            voltage_kv: newVoltage, 
+                            reason: 'Operator Adjustment',
+                            password: password || ''
+                        })
+                    });
+                    const data = await res.json();
+                    
+                    if (data.status === 'requires_password') {
+                        setPasswordModal({
+                            newVoltage,
+                            safeMax: data.threshold
+                        });
+                        return;
+                    }
+                    
+                    alert(`✅ Voltage adjusted to ${newVoltage} kV`);
+                    setPasswordModal(null);
+                    setModalPassword('');
+                } catch (e) {
+                    alert('❌ Failed to adjust voltage: ' + e.message);
+                    setPasswordModal(null);
+                    setModalPassword('');
+                }
+            };
+            
+            const handlePasswordSubmit = async () => {
+                if (!passwordModal) return;
+                
+                await submitVoltageAdjust(passwordModal.newVoltage, modalPassword);
             };
             
             const getStatusClass = (value, nominal, threshold) => {
@@ -350,6 +558,13 @@
                             </button>
                         )}
                         <button 
+                            className="control-btn standby-btn"
+                            onClick={handleStandbyNode}
+                            disabled={standbyLoading}
+                        >
+                            {standbyLoading ? '⏳ STANDBY...' : '⏸️ STANDBY'}
+                        </button>
+                        <button 
                             className="isolate-btn"
                             onClick={handleIsolateNode}
                             disabled={isolateLoading}
@@ -357,6 +572,65 @@
                             {isolateLoading ? '⏳ ISOLATING...' : '⚠️ ISOLATE NODE'}
                         </button>
                     </div>
+                    
+                    <div className="control-panel">
+                        <h3>VOLTAGE CONTROL</h3>
+                        <p>
+                            <button 
+                                className="voltage-control-btn"
+                                onClick={() => handleVoltageAdjust((telemetry.bus_voltage_kv || 0) - 5)}
+                            >
+                                −
+                            </button>
+                            <span className="voltage-display-text">{telemetry.bus_voltage_kv?.toFixed(1) || '--'} kV</span>
+                            <button 
+                                className="voltage-control-btn"
+                                onClick={() => handleVoltageAdjust((telemetry.bus_voltage_kv || 0) + 5)}
+                            >
+                                +
+                            </button>
+                        </p>
+                        {voltageThresholds && (
+                            <p style={{fontSize: '0.85rem', color: '#9ca3af'}}>
+                                Safe range: {voltageThresholds.min_voltage_kv} - {voltageThresholds.safe_max_voltage_kv} kV | 
+                                Max: {voltageThresholds.hard_max_voltage_kv} kV
+                            </p>
+                        )}
+                    </div>
+                    
+                    {passwordModal && (
+                        <div className="password-modal">
+                            <div className="password-modal-content">
+                                <h2>⚠️ Voltage Threshold Override</h2>
+                                <p>Requested voltage {passwordModal.newVoltage} kV exceeds safe threshold of {passwordModal.safeMax} kV</p>
+                                <p>Enter your password to confirm this action:</p>
+                                <input 
+                                    type="password" 
+                                    placeholder="Password"
+                                    value={modalPassword}
+                                    onChange={(e) => setModalPassword(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                                />
+                                <div className="password-modal-buttons">
+                                    <button 
+                                        className="confirm-btn"
+                                        onClick={handlePasswordSubmit}
+                                    >
+                                        CONFIRM
+                                    </button>
+                                    <button 
+                                        className="cancel-btn"
+                                        onClick={() => {
+                                            setPasswordModal(null);
+                                            setModalPassword('');
+                                        }}
+                                    >
+                                        CANCEL
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }

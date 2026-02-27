@@ -26,6 +26,31 @@ class TelemetryAggregator:
         self.history: Dict[str, List[Dict]] = defaultdict(list)
         self.max_history_length = 1000
         
+        # Node state tracking: node_id -> state (ONLINE, STANDBY, ISOLATED)
+        self.node_states: Dict[str, str] = {}
+        
+        # Node locations for mapping
+        self.node_locations: Dict[str, Dict] = {
+            'GEN-001': {'x': 100, 'y': 50, 'label': 'Generation-1'},
+            'GEN-002': {'x': 400, 'y': 50, 'label': 'Generation-2'},
+            'SUB-001': {'x': 50, 'y': 200, 'label': 'Transmission-1'},
+            'SUB-002': {'x': 250, 'y': 200, 'label': 'Transmission-2'},
+            'SUB-003': {'x': 450, 'y': 200, 'label': 'Transmission-3'},
+            'DIST-001': {'x': 150, 'y': 350, 'label': 'Distribution-1'},
+            'DIST-002': {'x': 350, 'y': 350, 'label': 'Distribution-2'},
+        }
+        
+        # Voltage thresholds: min and max allowed voltage (kV)
+        self.voltage_thresholds = {
+            'GEN-001': {'min': 370, 'max': 395, 'safe_max': 390},
+            'GEN-002': {'min': 370, 'max': 395, 'safe_max': 390},
+            'SUB-001': {'min': 120, 'max': 140, 'safe_max': 135},
+            'SUB-002': {'min': 120, 'max': 140, 'safe_max': 135},
+            'SUB-003': {'min': 120, 'max': 140, 'safe_max': 135},
+            'DIST-001': {'min': 8, 'max': 13, 'safe_max': 12},
+            'DIST-002': {'min': 8, 'max': 13, 'safe_max': 12},
+        }
+        
         logger.info("Telemetry aggregator initialized")
     
     def update_telemetry(self, node_id: str, telemetry: Dict):
@@ -176,6 +201,35 @@ class TelemetryAggregator:
             'nodes': nodes,
             'edges': edges
         }
+    
+    def set_node_state(self, node_id: str, state: str):
+        """Set node operational state (ONLINE, STANDBY, ISOLATED)"""
+        if state not in ['ONLINE', 'STANDBY', 'ISOLATED']:
+            raise ValueError(f"Invalid state: {state}")
+        self.node_states[node_id] = state
+        logger.info(f"Node {node_id} state set to {state}")
+    
+    def get_node_state(self, node_id: str) -> str:
+        """Get node operational state"""
+        return self.node_states.get(node_id, 'UNKNOWN')
+    
+    def get_node_locations(self) -> Dict:
+        """Get map of all node locations"""
+        return self.node_locations.copy()
+    
+    def get_voltage_threshold(self, node_id: str) -> Dict:
+        """Get voltage thresholds for a node"""
+        return self.voltage_thresholds.get(node_id, {'min': 0, 'max': 400, 'safe_max': 380})
+    
+    def is_voltage_in_safe_range(self, node_id: str, voltage_kv: float) -> bool:
+        """Check if voltage is within safe operating range"""
+        thresholds = self.get_voltage_threshold(node_id)
+        return thresholds['min'] <= voltage_kv <= thresholds['safe_max']
+    
+    def is_voltage_exceeds_threshold(self, node_id: str, voltage_kv: float) -> bool:
+        """Check if voltage exceeds maximum allowed threshold"""
+        thresholds = self.get_voltage_threshold(node_id)
+        return voltage_kv > thresholds['safe_max']
     
     def get_node_statistics(self, node_id: str) -> Optional[Dict]:
         """Get statistics for a specific node"""

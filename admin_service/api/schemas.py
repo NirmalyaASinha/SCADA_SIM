@@ -66,3 +66,18 @@ class ControlRequest(BaseModel):
 class IsolateRequest(BaseModel):
     reason: str = "Emergency Isolation"
     force: bool = False
+
+
+class VoltageAdjustRequest(BaseModel):
+    voltage_kv: float
+    reason: str = "Operational adjustment"
+    password: str = ""
+
+
+class StandbyRequest(BaseModel):
+    reason: str = "Scheduled maintenance"
+    duration_minutes: int = 60
+
+
+class StartNodeRequest(BaseModel):
+    reason: str = "Resuming operations"

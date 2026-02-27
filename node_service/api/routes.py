@@ -413,6 +413,163 @@ def create_app(node_service) -> FastAPI:
                 error=result.get('error', 'Unknown error')
             )
     
+    @app.post("/voltage")
+    async def adjust_voltage(
+        request: VoltageAdjustRequest,
+        req: Request,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Adjust node voltage with threshold checking"""
+        username = auth_handler.verify_token(credentials)
+        
+        # Get voltage thresholds for this node (simplified for node service)
+        thresholds = {
+            'min': 300,
+            'safe_max': 390,
+            'max': 410
+        }
+        
+        # Check if voltage exceeds safe threshold
+        if request.voltage_kv > thresholds['safe_max']:
+            # Require password verification for high voltage
+            if not request.password:
+                return {
+                    "status": "requires_password",
+                    "message": f"Voltage {request.voltage_kv} kV exceeds safe threshold {thresholds['safe_max']} kV. Password required.",
+                    "threshold": thresholds['safe_max'],
+                    "requested": request.voltage_kv
+                }
+            
+            # Verify password against stored credentials
+            user_creds = auth_handler.users.get(username, {})
+            if request.password != user_creds.get('password'):
+                logger.warning(f"Invalid password attempt for voltage adjustment by {username}")
+                raise HTTPException(status_code=401, detail="Invalid password")
+        
+        # Check hard maximum
+        if request.voltage_kv > thresholds['max']:
+            raise HTTPException(status_code=400, detail=f"Voltage {request.voltage_kv} exceeds hard maximum {thresholds['max']}")
+        
+        logger.info(f"Voltage adjusted to {request.voltage_kv} kV by {username}")
+        
+        # Log action
+        await node_service.log_operator_action(
+            operator=username,
+            operator_ip=get_client_ip(req),
+            action_type='VOLTAGE_ADJUSTMENT',
+            action_detail={
+                'requested_voltage_kv': request.voltage_kv,
+                'reason': request.reason,
+                'password_required': request.voltage_kv > thresholds['safe_max']
+            },
+            result='SUCCESS'
+        )
+        
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "voltage_kv": request.voltage_kv,
+            "threshold": thresholds['safe_max'],
+            "message": f"Voltage adjusted to {request.voltage_kv} kV"
+        }
+    
+    @app.post("/standby")
+    async def standby_node(
+        request: StandbyRequest,
+        req: Request,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Put node on standby"""
+        username = auth_handler.verify_token(credentials)
+        
+        logger.info(f"Node put on standby for {request.duration_minutes} min by {username}")
+        
+        # Log action
+        await node_service.log_operator_action(
+            operator=username,
+            operator_ip=get_client_ip(req),
+            action_type='STANDBY',
+            action_detail={
+                'duration_minutes': request.duration_minutes,
+                'reason': request.reason
+            },
+            result='SUCCESS'
+        )
+        
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "state": "STANDBY",
+            "duration_minutes": request.duration_minutes,
+            "message": f"Node is now on standby"
+        }
+    
+    @app.post("/isolate")
+    async def isolate_node(
+        request: IsolateRequest,
+        req: Request,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Isolate node from grid"""
+        username = auth_handler.verify_token(credentials)
+        
+        logger.warning(f"Node ISOLATED by {username}: {request.reason}")
+        
+        # Log action
+        await node_service.log_operator_action(
+            operator=username,
+            operator_ip=get_client_ip(req),
+            action_type='ISOLATION',
+            action_detail={
+                'reason': request.reason,
+                'force': request.force
+            },
+            result='SUCCESS'
+        )
+        
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "action": "isolated",
+            "reason": request.reason,
+            "message": f"Node has been physically and logically isolated from the grid."
+        }
+    
+    @app.get("/voltage/threshold")
+    async def get_voltage_threshold(
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Get voltage thresholds for this node"""
+        username = auth_handler.verify_token(credentials)
+        
+        # Thresholds vary by node type
+        if 'GEN' in node_service.config.NODE_ID:
+            thresholds = {
+                'min': 370,
+                'safe_max': 390,
+                'max': 410
+            }
+        elif 'SUB' in node_service.config.NODE_ID:
+            thresholds = {
+                'min': 120,
+                'safe_max': 135,
+                'max': 150
+            }
+        else:
+            thresholds = {
+                'min': 8,
+                'safe_max': 12,
+                'max': 14
+            }
+        
+        return {
+            "node_id": node_service.config.NODE_ID,
+            "min_voltage_kv": thresholds['min'],
+            "safe_max_voltage_kv": thresholds['safe_max'],
+            "hard_max_voltage_kv": thresholds['max'],
+            "requires_password_above": thresholds['safe_max']
+        }
+    
     @app.get("/alarms", response_model=AlarmListResponse)
     async def get_alarms(
         credentials: HTTPAuthorizationCredentials = Security(security)
