@@ -81,3 +81,12 @@ class StandbyRequest(BaseModel):
 
 class StartNodeRequest(BaseModel):
     reason: str = "Resuming operations"
+
+
+class NodeStateChangeRequest(BaseModel):
+    node_id: str
+    new_state: str
+    breaker: str
+    reason: str
+    operator: str
+    timestamp: str

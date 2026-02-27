@@ -4,39 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{NODE_ID}} - Operator Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
+        :root {
+            --color-green: #00e676;
+            --color-amber: #ffab00;
+            --color-red: #ff1744;
+            --color-grey: #37474f;
+            --bg-void: #0a0a0f;
+            --bg-panel: #0e1117;
+            --bg-card: #141820;
+            --border-normal: #1a2332;
+            --text-primary: #c8d8e8;
+            --text-secondary: #6b7a8d;
+        }
+        
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'JetBrains Mono', 'Consolas', monospace;
-            background: #0a0e1a;
-            color: #e0e0e0;
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-void);
+            color: var(--text-primary);
         }
+        
+        h1, h2, h3 {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+        }
+        
         .login-screen {
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+            background: linear-gradient(135deg, var(--bg-void) 0%, var(--bg-panel) 100%);
         }
         .login-card {
-            background: #151a26;
+            background: var(--bg-card);
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            border: 1px solid #2a3142;
+            border: 1px solid var(--border-normal);
             min-width: 400px;
         }
         .login-card h1 {
-            color: #4ade80;
+            color: var(--color-green);
             font-size: 1.5rem;
             margin-bottom: 0.5rem;
             font-weight: 700;
         }
         .login-card .subtitle {
-            color: #9ca3af;
+            color: var(--text-secondary);
             font-size: 0.9rem;
             margin-bottom: 1.5rem;
         }
@@ -44,60 +64,261 @@
             width: 100%;
             padding: 0.75rem;
             margin-bottom: 1rem;
-            background: #0a0e1a;
-            border: 1px solid #2a3142;
-            color: #e0e0e0;
+            background: var(--bg-void);
+            border: 1px solid var(--border-normal);
+            color: var(--text-primary);
             border-radius: 4px;
             font-family: inherit;
         }
         button {
             width: 100%;
             padding: 0.75rem;
-            background: #4ade80;
-            color: #0a0e1a;
+            background: var(--color-green);
+            color: var(--bg-void);
             border: none;
             border-radius: 4px;
             font-weight: 600;
             cursor: pointer;
-            font-family: inherit;
+            font-family: 'Rajdhani', sans-serif;
         }
         button:hover { background: #22c55e; }
         button:disabled { background: #374151; cursor: not-allowed; }
-        .isolate-btn {
-            background: #ea580c;
-            color: white;
-            border: 2px solid #dc2626;
-            margin-top: 0.5rem;
-        }
-        .isolate-btn:hover {
-            background: #dc2626;
-            box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
-        }
+        
         .dashboard {
-            padding: 1rem;
-        }
-        .header {
-            background: #151a26;
-            padding: 1rem 2rem;
-            border-bottom: 2px solid #4ade80;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: var(--bg-panel);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-normal);
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 2rem;
             align-items: center;
         }
-        .header h1 {
-            color: #4ade80;
-            font-size: 1.2rem;
+        
+        .header-left h1 {
+            color: var(--color-green);
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
         }
-        .frequency {
-            font-size: 2rem;
+        
+        .header-left .node-type {
+            display: inline-block;
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--color-green);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
             font-weight: 700;
-            color: #4ade80;
+            letter-spacing: 0.05em;
         }
+        
+        .header-center {
+            text-align: center;
+        }
+        
+        .state-badge {
+            display: inline-block;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            font-family: 'Rajdhani', sans-serif;
+        }
+        
+        .state-badge.ENERGIZED {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--color-green);
+            border: 2px solid var(--color-green);
+            animation: statePulse 2s ease-in-out infinite;
+        }
+        
+        .state-badge.TRIPPED {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--color-red);
+            border: 2px solid var(--color-red);
+            animation: stateBlink 0.5s infinite;
+        }
+        
+        .state-badge.DEENERGIZED {
+            background: rgba(55, 71, 79, 0.15);
+            color: var(--color-grey);
+            border: 2px solid var(--color-grey);
+        }
+        
+        .header-right {
+            text-align: right;
+        }
+        
+        .admin-conn {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .admin-conn .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 0.5rem;
+        }
+        
+        .admin-conn .dot.online {
+            background: var(--color-green);
+            box-shadow: 0 0 8px var(--color-green);
+        }
+        
+        .admin-conn .dot.offline {
+            background: var(--color-red);
+        }
+        
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 1rem;
-            margin-top: 1rem;
+            padding: 1.5rem;
+        }
+        .card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-normal);
+            position: relative;
+            overflow: hidden;
+        }
+        .card h3 {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--color-green);
+        }
+        .value.flash {
+            animation: valueFlash 0.3s;
+        }
+        .value.warning { color: var(--color-amber); }
+        .value.critical { color: var(--color-red); }
+        .unit {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .trend-arrow {
+            display: inline-block;
+            margin-left: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        .control-panel {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            margin: 0 1.5rem 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-normal);
+        }
+        
+        .breaker-control {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .breaker-btn {
+            flex: 1;
+            padding: 1.5rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Rajdhani', sans-serif;
+            border: 2px solid;
+        }
+        
+        .breaker-btn.close {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--color-green);
+            border-color: var(--color-green);
+        }
+        
+        .breaker-btn.close:hover {
+            background: var(--color-green);
+            color: var(--bg-void);
+        }
+        
+        .breaker-btn.open {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--color-red);
+            border-color: var(--color-red);
+        }
+        
+        .breaker-btn.open:hover {
+            background: var(--color-red);
+            color: white;
+        }
+        
+        .status-panel {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            margin: 0 1.5rem 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-normal);
+        }
+        
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+        }
+        
+        .status-row.energized {
+            border-left-color: var(--color-green);
+        }
+        
+        .status-row.offline {
+            border-left-color: var(--color-red);
+        }
+        
+        @keyframes valueFlash {
+            0%, 100% { color: inherit; }
+            50% { color: #ffffff; transform: scale(1.05); }
+        }
+        
+        @keyframes statePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        @keyframes stateBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .isolate-btn {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--color-red);
+            border: 2px solid var(--color-red);
+            margin-top: 0.5rem;
+        }
+        .isolate-btn:hover {
+            background: var(--color-red);
+            color: white;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+        }
         }
         .card {
             background: #151a26;
@@ -250,12 +471,40 @@
             const [token, setToken] = useState(null);
             const [nodeInfo, setNodeInfo] = useState({});
             const [telemetry, setTelemetry] = useState({});
+            const [prevTelemetry, setPrevTelemetry] = useState({});
+            const [flashingValues, setFlashingValues] = useState({});
+            const [adminConnected, setAdminConnected] = useState(false);
+            const [upstreamNodes, setUpstreamNodes] = useState([]);
+            const [downstreamNodes, setDownstreamNodes] = useState([]);
             const [error, setError] = useState('');
             
             useEffect(() => {
                 fetch(`${API_BASE}/`)
                     .then(r => r.json())
-                    .then(data => setNodeInfo(data));
+                    .then(data => {
+                        setNodeInfo(data);
+                        // Fetch topology info from admin
+                        fetch('http://localhost:9000/nodes/map')
+                            .then(r => r.json())
+                            .then(map => {
+                                const nodeId = data.node_id;
+                                const topology = {
+                                    'GEN-001': { upstream: [], downstream: ['SUB-001', 'SUB-002', 'SUB-003'] },
+                                    'GEN-002': { upstream: [], downstream: ['SUB-001', 'SUB-002', 'SUB-003'] },
+                                    'SUB-001': { upstream: ['GEN-001', 'GEN-002'], downstream: ['DIST-001'] },
+                                    'SUB-002': { upstream: ['GEN-001', 'GEN-002'], downstream: ['DIST-002'] },
+                                    'SUB-003': { upstream: ['GEN-001', 'GEN-002'], downstream: [] },
+                                    'DIST-001': { upstream: ['SUB-001'], downstream: [] },
+                                    'DIST-002': { upstream: ['SUB-002'], downstream: [] }
+                                };
+                                if (topology[nodeId]) {
+                                    setUpstreamNodes(topology[nodeId].upstream);
+                                    setDownstreamNodes(topology[nodeId].downstream);
+                                }
+                                setAdminConnected(true);
+                            })
+                            .catch(() => setAdminConnected(false));
+                    });
             }, []);
             
             useEffect(() => {
@@ -264,11 +513,68 @@
                 const interval = setInterval(() => {
                     fetch(`${API_BASE}/telemetry`)
                         .then(r => r.json())
-                        .then(data => setTelemetry(data));
+                        .then(data => {
+                            // Detect value changes for flash animation
+                            const newFlashing = {};
+                            ['bus_voltage_kv', 'line_current_a', 'active_power_mw', 'frequency_hz'].forEach(key => {
+                                if (prevTelemetry[key] !== data[key]) {
+                                    newFlashing[key] = true;
+                                }
+                            });
+                            if (Object.keys(newFlashing).length > 0) {
+                                setFlashingValues(newFlashing);
+                                setTimeout(() => setFlashingValues({}), 300);
+                            }
+                            setPrevTelemetry(data);
+                            setTelemetry(data);
+                        });
                 }, 1000);
                 
-                return () => clearInterval(interval);
-            }, [isAuthenticated]);
+                const adminPing = setInterval(() => {
+                    fetch('http://localhost:9000/grid/overview')
+                        .then(() => setAdminConnected(true))
+                        .catch(() => setAdminConnected(false));
+                }, 5000);
+                
+                return () => {
+                    clearInterval(interval);
+                    clearInterval(adminPing);
+                };
+            }, [isAuthenticated, prevTelemetry]);
+            
+            const getTrend = (current, prev) => {
+                if (!prev || !current) return '';
+                const diff = current - prev;
+                if (Math.abs(diff) < 0.01) return '→';
+                return diff > 0 ? '↑' : '↓';
+            };
+            
+            const getNodeType = () => {
+                if (!nodeInfo.node_id) return '';
+                if (nodeInfo.node_id.startsWith('GEN')) return 'GENERATION';
+                if (nodeInfo.node_id.startsWith('SUB')) return 'TRANSMISSION';
+                if (nodeInfo.node_id.startsWith('DIST')) return 'DISTRIBUTION';
+                return '';
+            };
+            
+            const getValueClass = (value, type) => {
+                if (!value || value === 0) return 'critical';
+                switch(type) {
+                    case 'voltage':
+                        if (value < 130 || value > 135) return 'warning';
+                        return '';
+                    case 'frequency':
+                        if (value < 49.8 || value > 50.2) return 'warning';
+                        if (value < 49.5 || value > 50.5) return 'critical';
+                        return '';
+                    case 'temp':
+                        if (value > 80) return 'warning';
+                        if (value > 90) return 'critical';
+                        return '';
+                    default:
+                        return '';
+                }
+            };
             
             const handleLogin = async (username, password) => {
                 try {
@@ -522,24 +828,19 @@
             return (
                 <div className="dashboard">
                     <div className="header">
-                        <h1>{nodeInfo.node_id} | {nodeInfo.node_type}</h1>
-                        <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-                            <div className={`frequency ${getStatusClass(telemetry.frequency_hz, 50.0, 0.01)}`}>
-                                {telemetry.frequency_hz?.toFixed(3) || '--'} Hz
+                        <div className="header-left">
+                            <h1>{nodeInfo.node_id}</h1>
+                            <span className="node-type">{getNodeType()}</span>
+                        </div>
+                        <div className="header-center">
+                            <div className={`state-badge ${nodeState?.state || 'ENERGIZED'}`}>
+                                {nodeState?.state || 'ENERGIZED'}
                             </div>
-                            <div className="status-badge" style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '4px',
-                                fontSize: '0.9rem',
-                                fontWeight: 'bold',
-                                backgroundColor: nodeState?.state === 'ISOLATED' ? 'rgba(239, 68, 68, 0.2)' : 
-                                               nodeState?.state === 'STANDBY' ? 'rgba(245, 158, 11, 0.2)' : 
-                                               'rgba(16, 185, 129, 0.2)',
-                                color: nodeState?.state === 'ISOLATED' ? '#ef4444' : 
-                                       nodeState?.state === 'STANDBY' ? '#f59e0b' : 
-                                       '#10b981'
-                            }}>
-                                {nodeState?.state || 'UNKNOWN'}
+                        </div>
+                        <div className="header-right">
+                            <div className="admin-conn">
+                                Admin: {adminConnected ? 'CONNECTED' : 'OFFLINE'}
+                                <span className={`dot ${adminConnected ? 'online' : 'offline'}`}></span>
                             </div>
                         </div>
                     </div>
@@ -547,20 +848,38 @@
                     <div className="grid">
                         <div className="card">
                             <h3>BUS VOLTAGE</h3>
-                            <div className="value">{telemetry.bus_voltage_kv?.toFixed(2) || '--'}</div>
+                            <div className={`value ${flashingValues.bus_voltage_kv ? 'flash' : ''} ${getValueClass(telemetry.bus_voltage_kv, 'voltage')}`}>
+                                {telemetry.bus_voltage_kv?.toFixed(2) || '--'}
+                                <span className="trend-arrow">{getTrend(telemetry.bus_voltage_kv, prevTelemetry.bus_voltage_kv)}</span>
+                            </div>
                             <div className="unit">kV</div>
                         </div>
                         
                         <div className="card">
                             <h3>LINE CURRENT</h3>
-                            <div className="value">{telemetry.line_current_a?.toFixed(1) || '--'}</div>
+                            <div className={`value ${flashingValues.line_current_a ? 'flash' : ''} ${getValueClass(telemetry.line_current_a, 'current')}`}>
+                                {telemetry.line_current_a?.toFixed(1) || '--'}
+                                <span className="trend-arrow">{getTrend(telemetry.line_current_a, prevTelemetry.line_current_a)}</span>
+                            </div>
                             <div className="unit">A</div>
                         </div>
                         
                         <div className="card">
                             <h3>ACTIVE POWER</h3>
-                            <div className="value">{telemetry.active_power_mw?.toFixed(1) || '--'}</div>
+                            <div className={`value ${flashingValues.active_power_mw ? 'flash' : ''} ${getValueClass(telemetry.active_power_mw, 'power')}`}>
+                                {telemetry.active_power_mw?.toFixed(1) || '--'}
+                                <span className="trend-arrow">{getTrend(telemetry.active_power_mw, prevTelemetry.active_power_mw)}</span>
+                            </div>
                             <div className="unit">MW</div>
+                        </div>
+                        
+                        <div className="card">
+                            <h3>FREQUENCY</h3>
+                            <div className={`value ${flashingValues.frequency_hz ? 'flash' : ''} ${getValueClass(telemetry.frequency_hz, 'frequency')}`}>
+                                {telemetry.frequency_hz?.toFixed(3) || '--'}
+                                <span className="trend-arrow">{getTrend(telemetry.frequency_hz, prevTelemetry.frequency_hz)}</span>
+                            </div>
+                            <div className="unit">Hz</div>
                         </div>
                         
                         <div className="card">
@@ -572,7 +891,9 @@
                         {telemetry.transformer_temp_c !== undefined && (
                             <div className="card">
                                 <h3>TRANSFORMER TEMP</h3>
-                                <div className="value">{telemetry.transformer_temp_c?.toFixed(1) || '--'}</div>
+                                <div className={`value ${getValueClass(telemetry.transformer_temp_c, 'temp')}`}>
+                                    {telemetry.transformer_temp_c?.toFixed(1) || '--'}
+                                </div>
                                 <div className="unit">°C</div>
                             </div>
                         )}
@@ -586,29 +907,67 @@
                         )}
                     </div>
                     
+                    {upstreamNodes.length > 0 && (
+                        <div className="status-panel">
+                            <h3 style={{marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em'}}>
+                                UPSTREAM POWER SOURCE
+                            </h3>
+                            {upstreamNodes.map(nodeId => (
+                                <div key={nodeId} className="status-row energized">
+                                    <div>
+                                        <span style={{fontWeight: '700', color: 'var(--color-green)'}}>●</span>
+                                        {' '}{nodeId}
+                                    </div>
+                                    <div style={{color: 'var(--color-green)'}}>
+                                        ENERGIZED ✅
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {downstreamNodes.length > 0 && (
+                        <div className="status-panel">
+                            <h3 style={{marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em'}}>
+                                DOWNSTREAM NODES (FED BY THIS NODE)
+                            </h3>
+                            {downstreamNodes.map(nodeId => (
+                                <div key={nodeId} className="status-row energized">
+                                    <div>
+                                        <span style={{fontWeight: '700', color: 'var(--color-green)'}}>●</span>
+                                        {' '}{nodeId}
+                                    </div>
+                                    <div style={{color: 'var(--color-green)'}}>
+                                        ENERGIZED ✅
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
                     <div className="control-panel">
-                        <h3>BREAKER CONTROL</h3>
-                        <p>Current State: {telemetry.breaker_state ? '🟢 CLOSED' : '🔴 OPEN'}</p>
-                        {telemetry.breaker_state ? (
-                            <button className="control-btn btn-danger" onClick={() => onControlBreaker('open')}>
-                                OPEN BREAKER
-                            </button>
-                        ) : (
-                            <button className="control-btn btn-success" onClick={() => onControlBreaker('close')}>
-                                CLOSE BREAKER
-                            </button>
-                        )}
-                        <button 
-                            className="control-btn standby-btn"
-                            onClick={handleStandbyNode}
-                            disabled={standbyLoading}
-                        >
-                            {standbyLoading ? '⏳ STANDBY...' : '⏸️ STANDBY'}
-                        </button>
+                        <h3 style={{marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.08em'}}>
+                            BREAKER CONTROL
+                        </h3>
+                        <p style={{marginBottom: '1rem', fontSize: '0.95rem'}}>
+                            Current State: {telemetry.breaker_state ? '🟢 CLOSED' : '🔴 OPEN'}
+                        </p>
+                        <div className="breaker-control">
+                            {telemetry.breaker_state ? (
+                                <button className="breaker-btn open" onClick={() => onControlBreaker('open')}>
+                                    OPEN BREAKER
+                                </button>
+                            ) : (
+                                <button className="breaker-btn close" onClick={() => onControlBreaker('close')}>
+                                    CLOSE BREAKER
+                                </button>
+                            )}
+                        </div>
                         <button 
                             className="isolate-btn"
                             onClick={handleIsolateNode}
                             disabled={isolateLoading}
+                            style={{width: '100%'}}
                         >
                             {isolateLoading ? '⏳ ISOLATING...' : '⚠️ ISOLATE NODE'}
                         </button>

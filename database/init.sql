@@ -93,6 +93,21 @@ CREATE TABLE IF NOT EXISTS alarms (
 CREATE INDEX IF NOT EXISTS idx_alarms_active ON alarms (node_id, raised_time DESC) WHERE cleared_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_alarms_priority ON alarms (priority, raised_time DESC) WHERE cleared_at IS NULL;
 
+-- Cascade events log
+CREATE TABLE IF NOT EXISTS cascade_events (
+    id                  BIGSERIAL PRIMARY KEY,
+    timestamp           TIMESTAMPTZ DEFAULT NOW(),
+    trigger_node        VARCHAR(20),
+    trigger_state       VARCHAR(20),
+    trigger_reason      TEXT,
+    trigger_operator    VARCHAR(50),
+    affected_nodes      TEXT[],
+    households_affected INTEGER,
+    restored_at         TIMESTAMPTZ,
+    duration_seconds    INTEGER,
+    severity            VARCHAR(20) DEFAULT 'CRITICAL'
+);
+
 -- Operator actions audit log
 CREATE TABLE IF NOT EXISTS operator_actions (
     id              BIGSERIAL PRIMARY KEY,

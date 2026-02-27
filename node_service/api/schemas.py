@@ -213,3 +213,11 @@ class IsolateRequest(BaseModel):
 
 class StartNodeRequest(BaseModel):
     reason: str = "Restoring from standby"
+
+
+class DeenergizeRequest(BaseModel):
+    reason: str = "Upstream power loss"
+
+
+class ReenergizeRequest(BaseModel):
+    reason: str = "Upstream power restored"

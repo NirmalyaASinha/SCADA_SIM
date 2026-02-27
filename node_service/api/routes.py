@@ -312,6 +312,22 @@ def create_app(node_service) -> FastAPI:
         )
         
         if result.get('success'):
+            state_value = node_service.simulation.get_state().node_state
+            breaker_label = "CLOSED" if new_state else "OPEN"
+            await node_service.notify_state_change(
+                new_state=state_value,
+                breaker=breaker_label,
+                reason=request.reason,
+                operator=username
+            )
+            await node_service.ws_server.broadcast_event({
+                "type": "state_change",
+                "node_id": node_service.config.NODE_ID,
+                "new_state": state_value,
+                "breaker": breaker_label,
+                "reason": request.reason,
+                "timestamp": datetime.utcnow().isoformat()
+            })
             return BreakerControlResponse(**result, reason=request.reason)
         else:
             return BreakerControlResponse(
@@ -321,6 +337,60 @@ def create_app(node_service) -> FastAPI:
                 error=result.get('error', 'Unknown error')
             )
     
+    @app.post("/control/deenergize")
+    async def deenergize_node(
+        request: DeenergizeRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Force node into DEENERGIZED state"""
+        username = auth_handler.verify_token(credentials)
+        result = node_service.simulation.set_node_state("DEENERGIZED", request.reason)
+
+        await node_service.ws_server.broadcast_event({
+            "type": "state_change",
+            "node_id": node_service.config.NODE_ID,
+            "new_state": "DEENERGIZED",
+            "breaker": "UNKNOWN",
+            "reason": request.reason,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "state": "DEENERGIZED",
+            "reason": request.reason,
+            "operator": username,
+            "details": result
+        }
+
+    @app.post("/control/reenergize")
+    async def reenergize_node(
+        request: ReenergizeRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Restore node to ENERGIZED state"""
+        username = auth_handler.verify_token(credentials)
+        result = node_service.simulation.set_node_state("ENERGIZED", request.reason)
+
+        await node_service.ws_server.broadcast_event({
+            "type": "state_change",
+            "node_id": node_service.config.NODE_ID,
+            "new_state": "ENERGIZED",
+            "breaker": "CLOSED" if node_service.simulation.get_state().breaker_state else "OPEN",
+            "reason": request.reason,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+
+        return {
+            "status": "success",
+            "node_id": node_service.config.NODE_ID,
+            "state": "ENERGIZED",
+            "reason": request.reason,
+            "operator": username,
+            "details": result
+        }
+
     @app.post("/control/tap", response_model=TapControlResponse)
     async def control_tap(
         request: TapControlRequest,

@@ -53,7 +53,7 @@ class NodeState:
     feeder_switch: bool = True
     
     # Operational state
-    node_state: str = "NORMAL"  # NORMAL, WARNING, FAULT, ISOLATED
+    node_state: str = "ENERGIZED"  # ENERGIZED, TRIPPED, FAULTED, DEENERGIZED, ISOLATED, STANDBY
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values"""
@@ -216,31 +216,18 @@ class BaseNode:
         """
         Update overall node operational state based on conditions
         """
-        if self.active_alarms:
-            # Check for critical alarms
-            critical_alarms = [a for a in self.active_alarms.values() if a['priority'] == 1]
-            if critical_alarms:
-                self.state.node_state = "FAULT"
-                return
-            
-            # Check for high priority alarms
-            high_alarms = [a for a in self.active_alarms.values() if a['priority'] == 2]
-            if high_alarms:
-                self.state.node_state = "WARNING"
-                return
-        
-        # Check digital fault states
+        if self.state.node_state in ["TRIPPED", "FAULTED", "DEENERGIZED", "ISOLATED", "STANDBY"]:
+            return
+
         if self.state.relay_trip or self.state.earth_fault:
-            self.state.node_state = "FAULT"
+            self.state.node_state = "FAULTED"
             return
-        
-        # Breaker open but no fault
+
         if not self.state.breaker_state:
-            self.state.node_state = "ISOLATED"
+            self.state.node_state = "TRIPPED"
             return
-        
-        # All normal
-        self.state.node_state = "NORMAL"
+
+        self.state.node_state = "ENERGIZED"
     
     # =========================================================================
     # STATE CONTROL METHODS (called from API)
@@ -283,6 +270,51 @@ class BaseNode:
             return "STANDBY"
         else:
             return "ONLINE"
+
+    def set_node_state(self, new_state: str, reason: str = "") -> Dict[str, Any]:
+        """Set the node state and apply immediate effects"""
+        old_state = self.state.node_state
+        self.state.node_state = new_state
+
+        if new_state == "TRIPPED":
+            self.state.breaker_state = False
+            self.state.relay_trip = False
+        elif new_state == "FAULTED":
+            self.state.breaker_state = False
+            self.state.relay_trip = True
+        elif new_state == "DEENERGIZED":
+            pass
+        elif new_state == "ISOLATED":
+            self.state.breaker_state = False
+            self._isolation_flag = True
+        elif new_state == "STANDBY":
+            self._standby_flag = True
+        elif new_state == "ENERGIZED":
+            self._isolation_flag = False
+            self._standby_flag = False
+            self.state.relay_trip = False
+            self.state.earth_fault = False
+            self.state.outage_flag = False
+
+        if new_state in ["TRIPPED", "FAULTED", "DEENERGIZED", "ISOLATED", "STANDBY"]:
+            self._zero_power_values()
+
+        return {
+            'success': True,
+            'old_state': old_state,
+            'new_state': new_state,
+            'reason': reason
+        }
+
+    def _zero_power_values(self):
+        """Zero out electrical telemetry when power is unavailable"""
+        self.state.bus_voltage_kv = 0.0
+        self.state.line_current_a = 0.0
+        self.state.active_power_mw = 0.0
+        self.state.reactive_power_mvar = 0.0
+        self.state.power_factor = 0.0
+        if self.state.load_percentage is not None:
+            self.state.load_percentage = 0.0
     
     def set_applied_voltage(self, voltage_kv: float):
         """Set voltage to be applied (overrides simulation)"""
@@ -304,13 +336,20 @@ class BaseNode:
         - Isolation: breaker off, no power, low voltage
         - Standby: reduced power, normal voltage
         """
+        if self.state.node_state in ["TRIPPED", "FAULTED", "DEENERGIZED", "ISOLATED", "STANDBY"]:
+            if self.state.node_state in ["TRIPPED", "FAULTED", "ISOLATED"]:
+                self.state.breaker_state = False
+            if self.state.node_state == "FAULTED":
+                self.state.relay_trip = True
+            self._zero_power_values()
+
         if self._isolation_flag:
             self.state.breaker_state = False
             self.state.active_power_mw = 0.0
             self.state.line_current_a = 0.0
             if self._applied_voltage is None:
                 self.state.bus_voltage_kv = 0.0
-        
+
         if self._standby_flag:
             self.state.active_power_mw = 0.0
             self.state.line_current_a = max(0.0, self.state.line_current_a * 0.05)  # Minimal standby current
@@ -431,6 +470,11 @@ class BaseNode:
         """
         old_state = self.state.breaker_state
         self.state.breaker_state = state
+        if not state:
+            self.state.node_state = "TRIPPED"
+        else:
+            if self.state.node_state == "TRIPPED":
+                self.state.node_state = "ENERGIZED"
         
         action = "CLOSED" if state else "OPENED"
         logger.info(f"{self.node_id} breaker {action}: {reason}")

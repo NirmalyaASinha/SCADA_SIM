@@ -179,6 +179,32 @@ class NodeService:
                 )
         except Exception as e:
             logger.error(f"Failed to log operator action: {e}")
+
+    async def notify_state_change(
+        self,
+        new_state: str,
+        breaker: str,
+        reason: str,
+        operator: str
+    ):
+        """Notify admin service of a node state change"""
+        payload = {
+            'node_id': self.config.NODE_ID,
+            'new_state': new_state,
+            'breaker': breaker,
+            'reason': reason,
+            'operator': operator,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+        try:
+            await self.http_client.post(
+                f"http://{self.config.MASTER_IP}:{self.config.MASTER_PORT}/nodes/{self.config.NODE_ID}/state_change",
+                json=payload,
+                timeout=5.0
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify admin of state change: {e}")
     
     async def get_recent_events(self, limit: int = 100):
         """Get recent events from memory"""

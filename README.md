@@ -21,6 +21,23 @@ A **production-faithful**, distributed SCADA (Supervisory Control and Data Acqui
 - **Protection Systems**: Overcurrent, undervoltage, frequency deviation alarms with 5 priority levels
 - **Operational Controls**: Circuit breaker operations, transformer tap changers (17 positions)
 
+### Power Grid Cascade Engine ⚡
+- **Grid Topology Awareness**: Accurate transmission line mapping (GEN → SUB → DIST → Consumers)
+- **Cascade Computation**: Intelligent power flow calculation — downstream nodes only de-energize if ALL upstream sources trip
+- **Real-Time Propagation**: Cascade events broadcast within 2 seconds to all dashboards
+- **Consumer Impact Tracking**: Automatic household blackout count (up to 83,000 consumers in north + south zones)
+- **Power Restoration**: Reverse cascade when breaker re-closes — nodes re-energize in order
+- **Cascade History**: All cascade events logged to database with duration and impact metrics
+
+### Modern Operator Dashboards 🎨
+- **Admin Operations Control Center**: Unified grid overview with live KPI cards, topology map, and alarm panel
+- **Sidebar Navigation**: 10 organized menu items (Grid Overview, Node Management, Control Center, Alarms, Security Monitoring, Historian, Modbus Monitor, Audit Log, Settings)
+- **Node Operator Dashboards**: Single-line diagrams showing electrical topology, breaker states, and upstream/downstream status
+- **Real-Time Styling**: Modern dark theme with neon green accents (#0a0a0f void background, #00e676 energy color)
+- **Responsive Layout**: Works on desktop control room displays and mobile operator tablets
+- **Live Data Badges**: Active alarms counter (amber), unauthorized Modbus connections (purple pulsing), session timer
+- **Cascade Animation**: Visual representation of power flowing through grid — turns grey when de-energized
+
 ### Security Research Features
 - **Intentionally Vulnerable Modbus TCP**: No authentication (S7-200 legacy compatibility)
 - **Transaction Logging**: All Modbus reads/writes logged to database with source IP tracking
@@ -103,6 +120,43 @@ The node will:
 4. Become visible in the admin dashboard
 
 **Repeat for more nodes on different machines.**
+
+---
+
+## ⚡ Power Grid Cascade Behavior
+
+### How It Works
+
+The SCADA system accurately models **grid topology and power flow cascades** — when one node trips, only the nodes that depend on it for power will de-energize.
+
+**Topology (Electricity Flow):**
+```
+┌─ GEN-001 ─┐
+└─ GEN-002 ─┤
+            ├─→ SUB-001 ──→ DIST-001 ──→ 🏠 45,000 households (North)
+            ├─→ SUB-002 ──→ DIST-002 ──→ 🏠 38,000 households (South)
+            └─→ SUB-003 ──→ [end, no distribution]
+```
+
+**Cascade Rules:**
+```
+✅ GEN-001 trips, GEN-002 online
+   → SUB nodes still have power from GEN-002
+   → No cascade (resilient design)
+
+❌ Both GEN-001 and GEN-002 trip
+   → ALL SUB nodes lose upstream power
+   → ALL DIST nodes de-energize
+   → 83,000 consumers lose power
+   → CRITICAL cascade event triggered
+```
+
+**Implementation:**
+- PowerFlowEngine in `admin_service/master/power_flow.py` computes cascade every 2 seconds
+- Node state changes (`ENERGIZED` → `TRIPPED`) immediately trigger cascade calculation
+- Downstream nodes receive `/control/deenergize` POST from admin service
+- All dashboard clients receive `cascade_event` WebSocket broadcast with affected household count
+- Database logs every cascade event for historical analysis
 
 ---
 
@@ -291,6 +345,7 @@ client.close()
 **alarms**: Active and historical alarms with priority levels
 **security_events**: Unauthorized access attempts and anomalies
 **active_connections**: Real-time tracking of all connected clients
+**cascade_events**: ⚡ NEW: All cascade events with trigger node, affected nodes, household impact, and restoration timestamp
 
 ### Direct Database Access
 
@@ -535,22 +590,31 @@ curl -X POST http://localhost:8111/control/breaker \
 SCADA_SIM_2/
 ├── admin_service/           # Admin console service
 │   ├── api/                 # REST API routes
-│   ├── dashboard/           # React admin UI
-│   ├── master/              # Registry, connector, aggregator
-│   ├── websocket/           # WebSocket broadcaster
+│   ├── dashboard/           # React admin UI (modern dark theme)
+│   ├── master/
+│   │   ├── registry.py      # Node registration tracking
+│   │   ├── connector.py     # Node connection manager
+│   │   ├── aggregator.py    # Telemetry aggregation
+│   │   ├── power_flow.py    # ⚡ NEW: Cascade engine
+│   │   └── __init__.py
+│   ├── websocket/           # WebSocket broadcaster for cascade events
 │   └── main.py              # Entry point
 │
 ├── node_service/            # Node service (used by all 7 nodes)
-│   ├── api/                 # Node REST API
-│   ├── dashboard/           # Operator UI
+│   ├── api/                 # Node REST APIs (control, telemetry)
+│   ├── dashboard/           # Operator UI (single-line diagrams)
 │   ├── protocols/           # Modbus TCP server
 │   ├── simulation/          # Physics simulation engine
+│   │   ├── base_node.py     # Enhanced with cascade-aware states
+│   │   ├── gen_node.py
+│   │   ├── sub_node.py
+│   │   └── dist_node.py
 │   ├── websocket/           # Telemetry broadcaster
-│   ├── startup_dialog.py    # IP selection dialog
+│   ├── startup_dialog.py    # IP selection for cross-machine deployment
 │   └── main.py              # Entry point
 │
 ├── database/
-│   └── init.sql             # Database schema + initial data
+│   └── init.sql             # Schema + cascade_events table
 │
 ├── docker-compose.yml       # Full system deployment
 ├── docker-compose.nodes.yml # Single node deployment

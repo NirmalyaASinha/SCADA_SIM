@@ -4,11 +4,13 @@ FastAPI application for SCADA Master
 """
 
 import logging
+from datetime import datetime
+
+import httpx
 from fastapi import FastAPI, Depends, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from datetime import datetime
 
 from .schemas import *
 from .auth import AdminAuthHandler, security
@@ -81,6 +83,101 @@ def create_admin_app(admin_service) -> FastAPI:
             raise HTTPException(status_code=404, detail="Node not registered")
         
         return {'status': 'ok', 'timestamp': datetime.utcnow().isoformat()}
+
+    @app.post("/nodes/{node_id}/state_change")
+    async def node_state_change(node_id: str, change: NodeStateChangeRequest):
+        """Handle node state change events and cascade propagation"""
+        if node_id != change.node_id:
+            raise HTTPException(status_code=400, detail="Node ID mismatch")
+
+        node_states = await admin_service._collect_node_states()
+        node_states[node_id] = change.new_state
+
+        affected_nodes = []
+        restored_nodes = []
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            if change.new_state in ["TRIPPED", "FAULTED", "ISOLATED"]:
+                affected_nodes = await admin_service.power_flow.compute_cascade(node_id, node_states)
+                households_affected = await admin_service.power_flow.get_households_affected(affected_nodes)
+
+                for affected_id in affected_nodes:
+                    node_info = admin_service.registry.get_node(affected_id)
+                    if not node_info:
+                        continue
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/control/deenergize"
+                    try:
+                        await client.post(
+                            url,
+                            json={"reason": change.reason},
+                            headers={"Authorization": f"Bearer {admin_service.config.MASTER_API_TOKEN}"}
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to deenergize {affected_id}: {e}")
+
+                event = {
+                    "type": "cascade_event",
+                    "trigger_node": change.node_id,
+                    "trigger_state": change.new_state,
+                    "trigger_reason": change.reason,
+                    "trigger_operator": change.operator,
+                    "affected_nodes": affected_nodes,
+                    "households_affected": households_affected,
+                    "severity": "CRITICAL",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await admin_service.ws_manager.broadcast_event(event)
+                await admin_service.log_cascade_event(event)
+
+                await admin_service.ws_manager.broadcast_event({
+                    "type": "alarm_raised",
+                    "node_id": change.node_id,
+                    "priority": 1,
+                    "message": f"GRID CASCADE FAILURE — {change.node_id} {change.new_state}",
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+
+            elif change.new_state == "ENERGIZED":
+                for candidate_id, state in node_states.items():
+                    if state != "DEENERGIZED":
+                        continue
+                    has_power = await admin_service.power_flow.has_power_source(candidate_id, node_states)
+                    if has_power:
+                        restored_nodes.append(candidate_id)
+
+                for restored_id in restored_nodes:
+                    node_info = admin_service.registry.get_node(restored_id)
+                    if not node_info:
+                        continue
+                    url = f"http://{node_info['ip']}:{node_info['rest_port']}/control/reenergize"
+                    try:
+                        await client.post(
+                            url,
+                            json={"reason": change.reason},
+                            headers={"Authorization": f"Bearer {admin_service.config.MASTER_API_TOKEN}"}
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to reenergize {restored_id}: {e}")
+
+                if restored_nodes:
+                    event = {
+                        "type": "power_restored",
+                        "trigger_node": change.node_id,
+                        "restored_nodes": restored_nodes,
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    await admin_service.ws_manager.broadcast_event(event)
+                    await admin_service.log_cascade_restoration(change.node_id)
+
+        await admin_service._refresh_power_flow()
+
+        return {
+            "status": "ok",
+            "trigger_node": change.node_id,
+            "new_state": change.new_state,
+            "affected_nodes": affected_nodes,
+            "restored_nodes": restored_nodes
+        }
     
     # =================================================================================
     # AUTHENTICATION

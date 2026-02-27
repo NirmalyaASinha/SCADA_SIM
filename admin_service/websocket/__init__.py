@@ -107,6 +107,24 @@ class AdminWebSocketManager:
             except Exception as e:
                 logger.error(f"Error in admin broadcast loop: {e}", exc_info=True)
                 await asyncio.sleep(2.0)
+
+    async def broadcast_event(self, event: dict):
+        """Broadcast a custom event to all connected admins"""
+        if not self.clients:
+            return
+
+        message = json.dumps(event)
+        dead_clients = set()
+        for client in self.clients:
+            try:
+                await client.send(message)
+            except websockets.exceptions.ConnectionClosed:
+                dead_clients.add(client)
+            except Exception as e:
+                logger.error(f"Error sending event to admin: {e}")
+                dead_clients.add(client)
+
+        self.clients -= dead_clients
     
     async def start(self):
         """Start the WebSocket server"""

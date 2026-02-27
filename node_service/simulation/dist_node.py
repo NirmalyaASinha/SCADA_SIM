@@ -210,6 +210,7 @@ class DistributionNode(BaseNode):
         # Over-current protection (circuit breaker trips)
         if self.state.line_current_a > 390.0 and self.state.breaker_state:
             self.state.breaker_state = False
+            self.state.relay_trip = True
             logger.error(f"{self.node_id} breaker tripped: over-current {self.state.line_current_a:.1f} A")
         
         # Apply operational state constraints (isolation, standby, voltage override)

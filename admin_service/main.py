@@ -10,9 +10,11 @@ import time
 from typing import Dict, Optional
 
 import uvicorn
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy import text
 
 from config import AdminConfig
-from master import NodeRegistry, NodeConnector, TelemetryAggregator
+from master import NodeRegistry, NodeConnector, TelemetryAggregator, PowerFlowEngine
 from websocket import AdminWebSocketManager
 from api import create_admin_app
 
@@ -43,6 +45,10 @@ class AdminService:
         
         # Create telemetry aggregator
         self.aggregator = TelemetryAggregator()
+
+        # Create power flow engine
+        self.power_flow = PowerFlowEngine()
+        self.power_flow_edges = []
         
         # Create node connector
         self.connector = NodeConnector(
@@ -55,9 +61,19 @@ class AdminService:
             port=9001,  # Admin WebSocket port
             aggregator=self.aggregator
         )
+
+        # Database engine (if available)
+        self.db_engine = None
+        try:
+            db_url_async = config.DB_URL.replace('postgresql://', 'postgresql+asyncpg://')
+            self.db_engine = create_async_engine(db_url_async, echo=False)
+            logger.info("Admin database engine initialized")
+        except Exception as e:
+            logger.warning(f"Database not available: {e}")
         
         # Heartbeat check task
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._power_flow_task: Optional[asyncio.Task] = None
         
         logger.info("AdminService initialized")
     
@@ -86,6 +102,110 @@ class AdminService:
             
             except Exception as e:
                 logger.error(f"Error in heartbeat monitor: {e}", exc_info=True)
+
+    async def _collect_node_states(self) -> Dict[str, str]:
+        """Build a normalized node state map from telemetry and registry"""
+        node_states: Dict[str, str] = {}
+
+        latest = self.aggregator.get_all_latest()
+        for node_id, telemetry in latest.items():
+            state = telemetry.get('node_state') or telemetry.get('operational_state') or 'UNKNOWN'
+            node_states[node_id] = state
+
+        for node_id, node_info in self.registry.nodes.items():
+            if node_info.get('status') == 'OFFLINE':
+                node_states[node_id] = 'OFFLINE'
+
+        return node_states
+
+    async def _refresh_power_flow(self):
+        """Recompute energized edges for the topology map"""
+        node_states = await self._collect_node_states()
+        telemetry = self.aggregator.get_all_latest()
+        self.power_flow_edges = await self.power_flow.get_energized_edges(node_states, telemetry)
+
+    async def power_flow_loop(self):
+        """Periodic power flow update loop"""
+        logger.info("Starting power flow engine loop")
+
+        while True:
+            try:
+                await asyncio.sleep(2)
+                await self._refresh_power_flow()
+            except Exception as e:
+                logger.error(f"Error in power flow loop: {e}", exc_info=True)
+
+    async def log_cascade_event(self, event: Dict):
+        """Persist cascade event to the database"""
+        if self.db_engine is None:
+            return
+
+        try:
+            async with self.db_engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO cascade_events (
+                            trigger_node,
+                            trigger_state,
+                            trigger_reason,
+                            trigger_operator,
+                            affected_nodes,
+                            households_affected,
+                            severity
+                        )
+                        VALUES (
+                            :trigger_node,
+                            :trigger_state,
+                            :trigger_reason,
+                            :trigger_operator,
+                            :affected_nodes,
+                            :households_affected,
+                            :severity
+                        )
+                        """
+                    ),
+                    {
+                        'trigger_node': event.get('trigger_node'),
+                        'trigger_state': event.get('trigger_state'),
+                        'trigger_reason': event.get('trigger_reason'),
+                        'trigger_operator': event.get('trigger_operator'),
+                        'affected_nodes': event.get('affected_nodes', []),
+                        'households_affected': event.get('households_affected', 0),
+                        'severity': event.get('severity', 'CRITICAL')
+                    }
+                )
+        except Exception as e:
+            logger.error(f"Failed to log cascade event: {e}")
+
+    async def log_cascade_restoration(self, trigger_node: str):
+        """Update the latest cascade event when power is restored"""
+        if self.db_engine is None:
+            return
+
+        try:
+            async with self.db_engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        """
+                        WITH latest AS (
+                            SELECT id
+                            FROM cascade_events
+                            WHERE trigger_node = :trigger_node
+                              AND restored_at IS NULL
+                            ORDER BY timestamp DESC
+                            LIMIT 1
+                        )
+                        UPDATE cascade_events
+                        SET restored_at = NOW(),
+                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - timestamp))::INTEGER
+                        WHERE id IN (SELECT id FROM latest)
+                        """
+                    ),
+                    {'trigger_node': trigger_node}
+                )
+        except Exception as e:
+            logger.error(f"Failed to update cascade restoration: {e}")
     
     async def start_all_services(self):
         """Start all admin services"""
@@ -99,6 +219,9 @@ class AdminService:
         
         # Start heartbeat monitor
         self._heartbeat_task = asyncio.create_task(self.heartbeat_monitor())
+
+        # Start power flow engine
+        self._power_flow_task = asyncio.create_task(self.power_flow_loop())
         
         logger.info("✅ All admin services started")
         self._print_startup_summary()

@@ -133,6 +133,24 @@ class WebSocketServer:
             except Exception as e:
                 logger.error(f"Error in broadcast loop: {e}", exc_info=True)
                 await asyncio.sleep(1.0)
+
+    async def broadcast_event(self, event: dict):
+        """Broadcast a custom event to all connected clients"""
+        if not self.clients:
+            return
+
+        message = json.dumps(event)
+        websockets_to_remove = set()
+        for client in self.clients:
+            try:
+                await client.send(message)
+            except websockets.exceptions.ConnectionClosed:
+                websockets_to_remove.add(client)
+            except Exception as e:
+                logger.error(f"Error sending event to client: {e}")
+                websockets_to_remove.add(client)
+
+        self.clients -= websockets_to_remove
     
     async def start(self):
         """Start the WebSocket server"""
