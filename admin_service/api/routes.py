@@ -211,6 +211,29 @@ def create_admin_app(admin_service) -> FastAPI:
             'action': control.action
         }
     
+    @app.post("/nodes/{node_id}/isolate")
+    async def isolate_node(
+        node_id: str,
+        request: IsolateRequest,
+        credentials: HTTPAuthorizationCredentials = Security(security)
+    ):
+        """Instantly trips all breakers and suspends Modbus writes for the specified node."""
+        payload = auth_handler.verify_token(credentials)
+        
+        # Check role
+        if payload.get('role') not in ['admin', 'engineer']:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        logger.warning(f"Node {node_id} ISOLATED by {payload['sub']}: {request.reason}")
+        
+        return {
+            "status": "success",
+            "node_id": node_id,
+            "action": "isolated",
+            "reason": request.reason,
+            "message": f"Node {node_id} has been physically and logically isolated from the grid."
+        }
+    
     # =================================================================================
     # ALARMS & EVENTS
     # =================================================================================

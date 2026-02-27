@@ -63,6 +63,16 @@
         }
         button:hover { background: #22c55e; }
         button:disabled { background: #374151; cursor: not-allowed; }
+        .isolate-btn {
+            background: #ea580c;
+            color: white;
+            border: 2px solid #dc2626;
+            margin-top: 0.5rem;
+        }
+        .isolate-btn:hover {
+            background: #dc2626;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+        }
         .dashboard {
             padding: 1rem;
         }
@@ -245,6 +255,29 @@
         }
         
         function Dashboard({ telemetry, nodeInfo, onControlBreaker }) {
+            const [isolateLoading, setIsolateLoading] = useState(false);
+            
+            const handleIsolateNode = async () => {
+                if (!window.confirm(`⚠️ CRITICAL: Isolate this node (${nodeInfo.node_id})? This will immediately trip all breakers!`)) {
+                    return;
+                }
+                
+                setIsolateLoading(true);
+                try {
+                    const res = await fetch(`http://localhost:9000/nodes/${nodeInfo.node_id}/isolate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: 'Operator Emergency Isolation', force: true })
+                    });
+                    const data = await res.json();
+                    alert(`✅ ${data.message}`);
+                } catch (e) {
+                    alert('❌ Failed to isolate node: ' + e.message);
+                } finally {
+                    setIsolateLoading(false);
+                }
+            };
+            
             const getStatusClass = (value, nominal, threshold) => {
                 if (!value) return '';
                 const diff = Math.abs(value - nominal) / nominal;
@@ -316,6 +349,13 @@
                                 CLOSE BREAKER
                             </button>
                         )}
+                        <button 
+                            className="isolate-btn"
+                            onClick={handleIsolateNode}
+                            disabled={isolateLoading}
+                        >
+                            {isolateLoading ? '⏳ ISOLATING...' : '⚠️ ISOLATE NODE'}
+                        </button>
                     </div>
                 </div>
             );

@@ -171,6 +171,55 @@
         .status-online { background: #065f46; color: #4ade80; }
         .status-offline { background: #7f1d1d; color: #ef4444; }
         .error { color: #ef4444; margin-top: 0.5rem; }
+        .node-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .isolate-btn {
+            padding: 0.5rem 1rem;
+            background: #ea580c;
+            color: white;
+            border: 2px solid #dc2626;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .isolate-btn:hover {
+            background: #dc2626;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+        }
+        .voltage-control {
+            display: flex;
+            gap: 0.3rem;
+            align-items: center;
+            margin-left: auto;
+        }
+        .voltage-btn {
+            padding: 0.3rem 0.6rem;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+        .voltage-btn:hover {
+            background: #1d4ed8;
+        }
+        .voltage-display {
+            color: #4ade80;
+            font-size: 0.9rem;
+            min-width: 60px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -354,6 +403,32 @@
         }
         
         function NodesTab({ nodes, token }) {
+            const [isolateLoading, setIsolateLoading] = useState({});
+            
+            const handleIsolateNode = async (nodeId) => {
+                if (!window.confirm(`⚠️ CRITICAL: Isolate node ${nodeId}? This will immediately trip all breakers!`)) {
+                    return;
+                }
+                
+                setIsolateLoading(prev => ({ ...prev, [nodeId]: true }));
+                try {
+                    const res = await fetch(`${API_BASE}/nodes/${nodeId}/isolate`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ reason: 'Admin Isolation', force: true })
+                    });
+                    const data = await res.json();
+                    alert(`✅ ${data.message}`);
+                } catch (e) {
+                    alert('❌ Failed to isolate node: ' + e.message);
+                } finally {
+                    setIsolateLoading(prev => ({ ...prev, [nodeId]: false }));
+                }
+            };
+            
             return (
                 <div className="nodes-grid">
                     {nodes.map(node => (
@@ -372,6 +447,20 @@
                                     <p>Voltage: {node.latest_telemetry.bus_voltage_kv?.toFixed(2)} kV</p>
                                 </>
                             )}
+                            <div className="node-actions">
+                                <button 
+                                    className="isolate-btn"
+                                    onClick={() => handleIsolateNode(node.node_id)}
+                                    disabled={isolateLoading[node.node_id]}
+                                >
+                                    {isolateLoading[node.node_id] ? '⏳ ISOLATING...' : '⚠️ ISOLATE NODE'}
+                                </button>
+                                <div className="voltage-control" style={{marginLeft: 'auto'}}>
+                                    <button className="voltage-btn">−</button>
+                                    <span className="voltage-display">{node.latest_telemetry?.bus_voltage_kv?.toFixed(1) || '--'} kV</span>
+                                    <button className="voltage-btn">+</button>
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>

@@ -61,3 +61,8 @@ class ControlRequest(BaseModel):
     action: str
     reason: str
     value: Optional[Any] = None
+
+
+class IsolateRequest(BaseModel):
+    reason: str = "Emergency Isolation"
+    force: bool = False
