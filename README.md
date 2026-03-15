@@ -702,7 +702,7 @@ curl -X POST http://localhost:8111/control/breaker \
 ## 📦 Project Structure
 
 ```
-SCADA_SIM_2/
+SCADA_SIM/
 ├── admin_service/           # Admin console service
 │   ├── api/                 # REST API routes
 │   ├── dashboard/           # React admin UI (modern dark theme)
@@ -710,7 +710,7 @@ SCADA_SIM_2/
 │   │   ├── registry.py      # Node registration tracking
 │   │   ├── connector.py     # Node connection manager
 │   │   ├── aggregator.py    # Telemetry aggregation
-│   │   ├── power_flow.py    # ⚡ NEW: Cascade engine
+│   │   ├── power_flow.py    # ⚡ Cascade engine
 │   │   └── __init__.py
 │   ├── websocket/           # WebSocket broadcaster for cascade events
 │   └── main.py              # Entry point
@@ -731,6 +731,9 @@ SCADA_SIM_2/
 ├── database/
 │   └── init.sql             # Schema + cascade_events table
 │
+├── tools/
+│   └── node_cli.py          # CLI tool for node management
+│
 ├── docker-compose.yml       # Full system deployment
 ├── docker-compose.nodes.yml # Single node deployment
 ├── prometheus.yml           # Monitoring configuration
@@ -740,6 +743,7 @@ SCADA_SIM_2/
 ├── stop.sh                  # Stop all services
 ├── status.sh                # Health check
 ├── logs.sh                  # View logs
+├── Makefile                 # Alternative build/run commands
 │
 ├── .env.example             # Environment variables template
 └── README.md                # This file
