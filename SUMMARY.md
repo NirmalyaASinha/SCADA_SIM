@@ -11,7 +11,7 @@ A complete, production-faithful SCADA (Supervisory Control and Data Acquisition)
 ## 📁 Project Structure
 
 ```
-SCADA_SIM_2/
+SCADA_SIM/
 ├── admin_service/              # Centralized monitoring and control
 │   ├── api/                    # REST API (port 9000)
 │   ├── dashboard/              # Admin web UI (port 3000)
@@ -27,6 +27,9 @@ SCADA_SIM_2/
 │
 ├── database/
 │   └── init.sql                # PostgreSQL + TimescaleDB schema
+│
+├── tools/
+│   └── node_cli.py             # CLI tool for node management
 │
 ├── docker-compose.yml          # Full system (admin + 7 nodes)
 ├── docker-compose.nodes.yml    # Single node deployment
@@ -96,7 +99,7 @@ SCADA_SIM_2/
 ### One-Machine Deployment
 
 ```bash
-cd /home/nirmalya/Desktop/SCADA_SIM_2
+cd SCADA_SIM
 ./launch.sh
 ```
 
